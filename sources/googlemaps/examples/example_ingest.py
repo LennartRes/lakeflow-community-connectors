@@ -1,4 +1,3 @@
-
 from pipeline.ingestion_pipeline import ingest
 from libs.source_loader import get_register_function
 
@@ -28,30 +27,35 @@ pipeline_spec = {
     "connection_name": "googlemaps",
     "objects": [
         # Minimal config: just specify the source table
-        {
-            "table": {
-                "source_table": "places",
-                "table_configuration": {
-                    "text_query": "Restaurants in Berlin",
-                    "scd_type": "APPEND_ONLY"
-                },
-            }
-        },
-        # Full config: customize destination and behavior
         # {
         #     "table": {
-        #         "source_table": "<YOUR_TABLE_NAME>",
-        #         "destination_catalog": "<YOUR_CATALOG>",
-        #         "destination_schema": "<YOUR_SCHEMA>",
-        #         "destination_table": "<YOUR_TABLE>",
+        #         "source_table": "places",
         #         "table_configuration": {
-        #             "scd_type": "<SCD_TYPE_1 | SCD_TYPE_2 | APPEND_ONLY>",
-        #             "primary_keys": ["<PK_COL1>", ...],
-        #             "<OTHER_OPTION_NAME>": "<VALUE>",  # e.g., for some connectors, additional options may be required (see connector's README).
+        #             "text_query": "Restaurants in Berlin",
+        #             "scd_type": "APPEND_ONLY"
         #         },
         #     }
         # },
-        # ... more tables to ingest...
+        # Full config: customize destination and behavior
+        {
+            "table": {
+                "source_table": "places",
+                "destination_catalog": "googlemaps",
+                "destination_schema": "places",
+                "destination_table": "restaurants_berlin",
+                "table_configuration": {
+                    "text_query": "Restaurants in Berlin",
+                    "scd_type": "APPEND_ONLY",
+                    "primary_keys": ["id"],
+                    "language_code": "en",
+                    "max_result_count": "20",
+                    "included_type": "restaurant",
+                    "min_rating": "4.0",
+                    "open_now": "true",
+                    "region_code": "DE"
+                },
+            }
+        },
     ],
 }
 
