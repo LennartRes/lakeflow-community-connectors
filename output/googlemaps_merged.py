@@ -235,8 +235,8 @@ def register_lakeflow_source(spark):
             self.places_base_url = "https://places.googleapis.com/v1"
             self.maps_base_url = "https://maps.googleapis.com/maps/api"
 
-            # Default field mask for Places API requests
-            self._default_field_mask = ",".join([
+            # Base field mask for Places API requests (without nextPageToken)
+            self._places_field_mask = ",".join([
                 "places.id",
                 "places.displayName",
                 "places.formattedAddress",
@@ -284,8 +284,13 @@ def register_lakeflow_source(spark):
                 "places.paymentOptions",
                 "places.plusCode",
                 "places.adrFormatAddress",
-                "nextPageToken",
             ])
+
+            # Field mask for Text Search (includes nextPageToken for pagination)
+            self._text_search_field_mask = self._places_field_mask + ",nextPageToken"
+
+            # Field mask for Nearby Search (no nextPageToken - uses different pagination)
+            self._nearby_search_field_mask = self._places_field_mask
 
             # =====================
             # Places Schema
@@ -623,11 +628,16 @@ def register_lakeflow_source(spark):
             self, table_options: Dict[str, str]
         ) -> Tuple[Iterator[Dict], Dict]:
             """
-            Read data from the places table using Text Search API.
+            Read data from the places table using Text Search or Nearby Search API.
+
+            Supports two search modes:
+            1. Text Search: Use `text_query` to search by text (e.g., "restaurants in Seattle")
+            2. Nearby Search: Use coordinates OR address with `radius` to search within a circle
 
             Args:
                 table_options: Dictionary containing:
-                    - text_query: Required. The search query (e.g., "restaurants in Seattle")
+                    TEXT SEARCH MODE (use text_query):
+                    - text_query: The search query (e.g., "restaurants in Seattle")
                     - language_code: Optional. Language code for results (e.g., "en")
                     - max_result_count: Optional. Maximum results per page (1-20, default 20)
                     - included_type: Optional. Restrict to specific place type
@@ -635,15 +645,65 @@ def register_lakeflow_source(spark):
                     - open_now: Optional. Only return places open now ("true"/"false")
                     - region_code: Optional. Region code for biasing (e.g., "US")
 
+                    NEARBY SEARCH MODE (use location_address OR latitude+longitude, plus radius):
+                    - location_address: Address/city to search near (e.g., "Berlin, Germany")
+                    - latitude: Center latitude for nearby search (e.g., "52.5200")
+                    - longitude: Center longitude for nearby search (e.g., "13.4050")
+                    - radius: Search radius in meters (required, e.g., "1000")
+                    - included_types: Optional. Comma-separated place types to include
+                    - excluded_types: Optional. Comma-separated place types to exclude
+                    - language_code: Optional. Language code for results (e.g., "en")
+                    - max_result_count: Optional. Maximum results (1-20, default 20)
+                    - rank_preference: Optional. "DISTANCE" or "POPULARITY"
+
             Returns:
                 Tuple of (iterator of place records, empty offset dict)
             """
-            # Validate required parameter
+            # Determine search mode based on provided parameters
             text_query = table_options.get("text_query")
-            if not text_query:
+            location_address = table_options.get("location_address")
+            latitude = table_options.get("latitude")
+            longitude = table_options.get("longitude")
+            radius = table_options.get("radius")
+
+            # Check for nearby search parameters
+            has_coords = latitude and longitude
+            has_location_address = bool(location_address)
+            has_nearby_params = (has_coords or has_location_address) and radius
+
+            # Validate conflicting parameters
+            if text_query and has_nearby_params:
                 raise ValueError(
-                    "table_options must include 'text_query' parameter for the places table"
+                    "Cannot use both 'text_query' and nearby search parameters. "
+                    "Choose one search mode: text search OR nearby search."
                 )
+
+            if has_location_address and has_coords:
+                raise ValueError(
+                    "Cannot use both 'location_address' and 'latitude/longitude'. "
+                    "Choose one: provide an address OR coordinates."
+                )
+
+            if not text_query and not has_nearby_params:
+                raise ValueError(
+                    "table_options must include either:\n"
+                    "  - 'text_query' for text search, OR\n"
+                    "  - 'location_address' + 'radius' for nearby search (address-based), OR\n"
+                    "  - 'latitude' + 'longitude' + 'radius' for nearby search (coordinates)"
+                )
+
+            if has_nearby_params:
+                return self._read_places_nearby(table_options)
+            else:
+                return self._read_places_text_search(table_options)
+
+        def _read_places_text_search(
+            self, table_options: Dict[str, str]
+        ) -> Tuple[Iterator[Dict], Dict]:
+            """
+            Read places using Text Search API.
+            """
+            text_query = table_options.get("text_query")
 
             # Build request parameters
             request_body = {
@@ -682,7 +742,7 @@ def register_lakeflow_source(spark):
                         headers={
                             "Content-Type": "application/json",
                             "X-Goog-Api-Key": self.api_key,
-                            "X-Goog-FieldMask": self._default_field_mask,
+                            "X-Goog-FieldMask": self._text_search_field_mask,
                         },
                         json=current_body,
                     )
@@ -690,6 +750,186 @@ def register_lakeflow_source(spark):
                     if response.status_code != 200:
                         raise Exception(
                             f"Google Places API error: {response.status_code} {response.text}"
+                        )
+
+                    data = response.json()
+                    places = data.get("places", [])
+
+                    # Yield each place
+                    for place in places:
+                        yield place
+
+                    # Check for next page
+                    next_page_token = data.get("nextPageToken")
+                    if not next_page_token:
+                        break
+
+                    # Update request for next page
+                    current_body["pageToken"] = next_page_token
+                    page_count += 1
+
+            return places_iterator(), {}
+
+        def _geocode_address(
+            self, address: str, table_options: Dict[str, str]
+        ) -> Dict[str, float]:
+            """
+            Geocode an address to lat/lng coordinates using the Geocoding API.
+
+            Args:
+                address: Address string to geocode (e.g., "Berlin, Germany")
+                table_options: Additional options that may contain language_code
+
+            Returns:
+                Dictionary with 'lat' and 'lng' keys
+
+            Raises:
+                ValueError: If geocoding returns no results
+                Exception: If API call fails
+            """
+            params = {
+                "key": self.api_key,
+                "address": address,
+            }
+
+            # Pass through language if provided
+            if "language_code" in table_options:
+                params["language"] = table_options["language_code"]
+
+            response = requests.get(
+                f"{self.maps_base_url}/geocode/json",
+                params=params,
+            )
+
+            if response.status_code != 200:
+                raise Exception(
+                    f"Google Geocoding API error while geocoding '{address}': "
+                    f"{response.status_code} {response.text}"
+                )
+
+            data = response.json()
+            status = data.get("status")
+
+            if status == "ZERO_RESULTS":
+                raise ValueError(
+                    f"Could not geocode address '{address}': No results found. "
+                    "Please provide a more specific address or use latitude/longitude directly."
+                )
+            elif status != "OK":
+                raise Exception(
+                    f"Google Geocoding API error for '{address}': status={status}, "
+                    f"error_message={data.get('error_message', 'Unknown error')}"
+                )
+
+            results = data.get("results", [])
+            if not results:
+                raise ValueError(
+                    f"Could not geocode address '{address}': Empty results. "
+                    "Please provide a more specific address."
+                )
+
+            # Use the first result's location
+            location = results[0].get("geometry", {}).get("location", {})
+            lat = location.get("lat")
+            lng = location.get("lng")
+
+            if lat is None or lng is None:
+                raise ValueError(
+                    f"Could not extract coordinates from geocoding result for '{address}'"
+                )
+
+            return {"lat": lat, "lng": lng}
+
+        def _read_places_nearby(
+            self, table_options: Dict[str, str]
+        ) -> Tuple[Iterator[Dict], Dict]:
+            """
+            Read places using Nearby Search API.
+
+            Args:
+                table_options: Dictionary containing:
+                    - location_address: Address to search near (alternative to lat/lng)
+                    - latitude: Center latitude (required if no location_address)
+                    - longitude: Center longitude (required if no location_address)
+                    - radius: Search radius in meters (required)
+                    - included_types: Optional. Comma-separated place types to include
+                    - excluded_types: Optional. Comma-separated place types to exclude
+                    - language_code: Optional. Language code for results
+                    - max_result_count: Optional. Maximum results (1-20)
+                    - rank_preference: Optional. "DISTANCE" or "POPULARITY"
+
+            Returns:
+                Tuple of (iterator of place records, empty offset dict)
+            """
+            # Get coordinates - either from location_address or lat/lng
+            location_address = table_options.get("location_address")
+
+            if location_address:
+                # Geocode the address to get coordinates
+                coords = self._geocode_address(location_address, table_options)
+                latitude = coords["lat"]
+                longitude = coords["lng"]
+            else:
+                # Use provided coordinates
+                latitude = float(table_options["latitude"])
+                longitude = float(table_options["longitude"])
+
+            radius = float(table_options["radius"])
+
+            # Build request body with location restriction
+            request_body = {
+                "locationRestriction": {
+                    "circle": {
+                        "center": {
+                            "latitude": latitude,
+                            "longitude": longitude,
+                        },
+                        "radius": radius,
+                    }
+                }
+            }
+
+            # Add optional parameters
+            if "included_types" in table_options:
+                # Split comma-separated types into array
+                types = [t.strip() for t in table_options["included_types"].split(",")]
+                request_body["includedTypes"] = types
+
+            if "excluded_types" in table_options:
+                # Split comma-separated types into array
+                types = [t.strip() for t in table_options["excluded_types"].split(",")]
+                request_body["excludedTypes"] = types
+
+            if "language_code" in table_options:
+                request_body["languageCode"] = table_options["language_code"]
+
+            if "max_result_count" in table_options:
+                request_body["maxResultCount"] = int(table_options["max_result_count"])
+
+            if "rank_preference" in table_options:
+                request_body["rankPreference"] = table_options["rank_preference"].upper()
+
+            # Create iterator that yields places
+            def places_iterator() -> Iterator[Dict]:
+                current_body = request_body.copy()
+                page_count = 0
+                max_pages = 3  # Nearby Search also supports pagination
+
+                while page_count < max_pages:
+                    # Make API request to Nearby Search endpoint
+                    response = requests.post(
+                        f"{self.places_base_url}/places:searchNearby",
+                        headers={
+                            "Content-Type": "application/json",
+                            "X-Goog-Api-Key": self.api_key,
+                            "X-Goog-FieldMask": self._nearby_search_field_mask,
+                        },
+                        json=current_body,
+                    )
+
+                    if response.status_code != 200:
+                        raise Exception(
+                            f"Google Places Nearby Search API error: {response.status_code} {response.text}"
                         )
 
                     data = response.json()
