@@ -65,7 +65,12 @@ The Google Maps connector supports **three static objects**:
 
 ### `places`
 
-The `places` object retrieves location data using the Text Search API. Each place record includes:
+The `places` object retrieves location data using **two search modes**:
+
+1. **Text Search**: Search by text query (e.g., "restaurants in Seattle")
+2. **Nearby Search**: Search within a geographic area defined by coordinates and radius
+
+Each place record includes:
 
 - Unique place identifier
 - Name and address information
@@ -79,17 +84,37 @@ The `places` object retrieves location data using the Text Search API. Each plac
 
 **Result Limit**: The API returns a maximum of 60 results per search query (3 pages of 20 results).
 
-#### Table Options for `places`
+#### Table Options for `places` - Text Search Mode
+
+Use `text_query` to search by text:
 
 | Option | Type | Required | Description | Example |
 |--------|------|----------|-------------|---------|
-| `text_query` | string | Yes | The search query for places | `"restaurants in Seattle"` |
+| `text_query` | string | Yes* | The search query for places | `"restaurants in Seattle"` |
 | `language_code` | string | No | Language code for results | `"en"` |
 | `max_result_count` | string | No | Maximum results per page (1-20, default 20) | `"20"` |
 | `included_type` | string | No | Restrict to a specific place type | `"restaurant"` |
 | `min_rating` | string | No | Minimum average rating filter (1.0-5.0) | `"4.0"` |
 | `open_now` | string | No | Only return places currently open | `"true"` |
 | `region_code` | string | No | Region code for biasing results | `"US"` |
+
+#### Table Options for `places` - Nearby Search Mode
+
+Search within a geographic circle using either an address OR coordinates:
+
+| Option | Type | Required | Description | Example |
+|--------|------|----------|-------------|---------|
+| `location_address` | string | Yes* | Address/city to search near (auto-geocoded) | `"Alexanderplatz, Berlin"` |
+| `latitude` | string | Yes* | Center latitude for nearby search | `"52.5200"` |
+| `longitude` | string | Yes* | Center longitude for nearby search | `"13.4050"` |
+| `radius` | string | Yes | Search radius in meters (max 50000) | `"1000"` |
+| `included_types` | string | No | Comma-separated place types to include | `"restaurant,cafe"` |
+| `excluded_types` | string | No | Comma-separated place types to exclude | `"bar"` |
+| `language_code` | string | No | Language code for results | `"en"` |
+| `max_result_count` | string | No | Maximum results (1-20, default 20) | `"20"` |
+| `rank_preference` | string | No | Ranking: `DISTANCE` or `POPULARITY` | `"DISTANCE"` |
+
+*Requires `radius` plus ONE of: `location_address` OR (`latitude` + `longitude`). The `location_address` option internally geocodes the address to coordinates using the Geocoding API.
 
 #### Schema Highlights for `places`
 
@@ -290,6 +315,27 @@ Follow the Lakeflow Community Connector UI, which will guide you through setting
       },
       {
         "table": {
+          "source_table": "places",
+          "latitude": "52.5200",
+          "longitude": "13.4050",
+          "radius": "1500",
+          "included_types": "gas_station",
+          "rank_preference": "DISTANCE",
+          "language_code": "de"
+        }
+      },
+      {
+        "table": {
+          "source_table": "places",
+          "location_address": "Eiffel Tower, Paris, France",
+          "radius": "500",
+          "included_types": "restaurant,cafe",
+          "excluded_types": "bar",
+          "max_result_count": "20"
+        }
+      },
+      {
+        "table": {
           "source_table": "geocoder",
           "address": "1600 Amphitheatre Parkway, Mountain View, CA",
           "language": "en"
@@ -367,9 +413,16 @@ Since all tables use snapshot ingestion:
 - For `distance_matrix`: Ensure origins and destinations are valid locations
 
 **Missing Required Parameter Error:**
-- `places` requires `text_query`
+- `places` requires ONE of:
+  - `text_query` for text search mode, OR
+  - `location_address` + `radius` for nearby search (address-based), OR
+  - `latitude` + `longitude` + `radius` for nearby search (coordinates)
 - `geocoder` requires one of `address`, `latlng`, or `place_id`
 - `distance_matrix` requires both `origins` and `destinations`
+
+**Conflicting Parameters Error (places):**
+- Cannot use `text_query` together with nearby search parameters (`location_address`, `latitude`, `longitude`, `radius`)
+- Cannot use both `location_address` and `latitude`/`longitude` — choose one location method
 
 **Rate Limiting / Quota Exceeded:**
 - All APIs have usage quotas—check your Google Cloud Console for current limits
@@ -398,6 +451,7 @@ Since all tables use snapshot ingestion:
 - **Official Google Documentation**:
   - [Places API Overview](https://developers.google.com/maps/documentation/places/web-service)
   - [Text Search (New)](https://developers.google.com/maps/documentation/places/web-service/text-search)
+  - [Nearby Search (New)](https://developers.google.com/maps/documentation/places/web-service/nearby-search)
   - [Place Data Fields](https://developers.google.com/maps/documentation/places/web-service/data-fields)
   - [Place Types](https://developers.google.com/maps/documentation/places/web-service/place-types)
   - [Geocoding API](https://developers.google.com/maps/documentation/geocoding)

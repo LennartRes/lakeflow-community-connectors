@@ -28,10 +28,15 @@ sources/github/github_api_doc.md
 sources/github/configs/dev_config.json
 sources/github/configs/dev_table_config.json
 sources/github/test/test_github_lakeflow_connect.py
+sources/googlemaps/README.md
+sources/googlemaps/_generated_googlemaps_python_source.py
 sources/googlemaps/googlemaps.py
 sources/googlemaps/googlemaps_api_doc.md
 sources/googlemaps/configs/dev_config.json
 sources/googlemaps/configs/dev_table_config.json
+sources/googlemaps/examples/01_get_started.py
+sources/googlemaps/examples/02_silver_transformations.py
+sources/googlemaps/examples/03_gold_transformations.py
 sources/googlemaps/test/test_googlemaps_lakeflow_connect.py
 sources/hubspot/README.md
 sources/hubspot/_generated_hubspot_python_source.py
@@ -55,6 +60,7 @@ sources/zendesk/_generated_zendesk_python_source.py
 sources/zendesk/zendesk.py
 sources/zendesk/configs/dev_config.json
 sources/zendesk/test/test_zendesk_lakeflow_connect.py
+tests/__init__.py
 tests/lakeflow_connect_test_utils.py
 tests/test_suite.py
 tests/test_utils.py

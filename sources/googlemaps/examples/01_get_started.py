@@ -83,6 +83,86 @@ places_example = {
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC ### Example A2: Places - Nearby Search (by Coordinates)
+# MAGIC Find places within a geographic area using latitude/longitude
+
+# COMMAND ----------
+
+# Places Nearby Search - Search by coordinates and radius
+places_nearby_example = {
+    "connection_name": CONNECTION_NAME,
+    "objects": [
+        {
+            "table": {
+                "source_table": "places",
+                "destination_catalog": DESTINATION_CATALOG,
+                "destination_schema": DESTINATION_SCHEMA,
+                "destination_table": "gas_stations_nearby",
+                "table_configuration": {
+                    # REQUIRED for Nearby Search: latitude, longitude, radius
+                    "latitude": "52.5065",             # Center latitude (Berlin office)
+                    "longitude": "13.4264",            # Center longitude
+                    "radius": "2000",                  # Search radius in meters (max 50000)
+                    
+                    # OPTIONAL: Filter by place types
+                    "included_types": "gas_station",   # Comma-separated types to include
+                    # "excluded_types": "car_wash",    # Comma-separated types to exclude
+                    
+                    # OPTIONAL: Search preferences
+                    "rank_preference": "DISTANCE",     # DISTANCE or POPULARITY
+                    "language_code": "de",             # Language for results
+                    "max_result_count": "20",          # Results per page (1-20)
+                    
+                    "scd_type": "SCD_TYPE_1",
+                    "primary_keys": ["id"],
+                },
+            }
+        },
+    ],
+}
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Example A3: Places - Nearby Search (by Address)
+# MAGIC Find places near an address - no need to look up coordinates!
+
+# COMMAND ----------
+
+# Places Nearby Search - Search by address (auto-geocoded)
+places_nearby_address_example = {
+    "connection_name": CONNECTION_NAME,
+    "objects": [
+        {
+            "table": {
+                "source_table": "places",
+                "destination_catalog": DESTINATION_CATALOG,
+                "destination_schema": DESTINATION_SCHEMA,
+                "destination_table": "cafes_near_landmark",
+                "table_configuration": {
+                    # Use location_address instead of lat/lng - automatically geocoded!
+                    "location_address": "Brandenburg Gate, Berlin, Germany",
+                    "radius": "500",                   # Search radius in meters
+                    
+                    # OPTIONAL: Filter by place types
+                    "included_types": "cafe,coffee_shop",
+                    
+                    # OPTIONAL: Search preferences
+                    "rank_preference": "DISTANCE",
+                    "language_code": "en",
+                    "max_result_count": "20",
+                    
+                    "scd_type": "SCD_TYPE_1",
+                    "primary_keys": ["id"],
+                },
+            }
+        },
+    ],
+}
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC ### Example B: Geocoding
 # MAGIC Convert addresses to coordinates or coordinates to addresses
 
@@ -190,7 +270,7 @@ distance_matrix_example = {
 combined_pipeline_spec = {
     "connection_name": CONNECTION_NAME,
     "objects": [
-        # Places: Search for gas stations
+        # Places (Text Search): Search for gas stations by text query
         {
             "table": {
                 "source_table": "places",
@@ -202,6 +282,25 @@ combined_pipeline_spec = {
                     "included_type": "gas_station",
                     "max_result_count": "20",
                     "region_code": "DE",
+                    "scd_type": "SCD_TYPE_1",
+                    "primary_keys": ["id"],
+                },
+            }
+        },
+        # Places (Nearby Search): Search for cafes near office
+        {
+            "table": {
+                "source_table": "places",
+                "destination_catalog": DESTINATION_CATALOG,
+                "destination_schema": DESTINATION_SCHEMA,
+                "destination_table": "cafes_near_office",
+                "table_configuration": {
+                    "latitude": "52.5065",
+                    "longitude": "13.4264",
+                    "radius": "500",
+                    "included_types": "cafe,coffee_shop",
+                    "rank_preference": "DISTANCE",
+                    "language_code": "en",
                     "scd_type": "SCD_TYPE_1",
                     "primary_keys": ["id"],
                 },
@@ -260,11 +359,13 @@ register_lakeflow_source(spark)
 # COMMAND ----------
 
 # Choose your pipeline spec (uncomment one):
-pipeline_spec = combined_pipeline_spec      # Full combined example
-# pipeline_spec = places_example            # Just places
-# pipeline_spec = geocoder_forward_example  # Just forward geocoding
-# pipeline_spec = geocoder_reverse_example  # Just reverse geocoding
-# pipeline_spec = distance_matrix_example   # Just distance matrix
+pipeline_spec = combined_pipeline_spec          # Full combined example
+# pipeline_spec = places_example                # Places - text search
+# pipeline_spec = places_nearby_example         # Places - nearby search (by coordinates)
+# pipeline_spec = places_nearby_address_example # Places - nearby search (by address)
+# pipeline_spec = geocoder_forward_example      # Forward geocoding (address to coords)
+# pipeline_spec = geocoder_reverse_example      # Reverse geocoding (coords to address)
+# pipeline_spec = distance_matrix_example       # Distance matrix
 
 # Run the ingestion
 ingest(spark, pipeline_spec)
@@ -293,16 +394,33 @@ ingest(spark, pipeline_spec)
 # MAGIC %md
 # MAGIC ## 📚 Reference
 # MAGIC 
-# MAGIC ### Places Table Options
+# MAGIC ### Places Table Options - Text Search Mode
+# MAGIC Use `text_query` to search by natural language:
 # MAGIC | Option | Required | Description |
 # MAGIC |--------|----------|-------------|
-# MAGIC | `text_query` | Yes | Natural language search query |
+# MAGIC | `text_query` | Yes* | Natural language search query |
 # MAGIC | `language_code` | No | Language for results (e.g., "en") |
 # MAGIC | `max_result_count` | No | Results per page (1-20, default 20) |
 # MAGIC | `included_type` | No | Restrict to place type (e.g., "restaurant") |
 # MAGIC | `min_rating` | No | Minimum rating filter (1.0-5.0) |
 # MAGIC | `open_now` | No | Only return open places ("true"/"false") |
 # MAGIC | `region_code` | No | Region code for biasing (e.g., "US") |
+# MAGIC 
+# MAGIC ### Places Table Options - Nearby Search Mode
+# MAGIC Use `location_address` OR (`latitude` + `longitude`), plus `radius`:
+# MAGIC | Option | Required | Description |
+# MAGIC |--------|----------|-------------|
+# MAGIC | `location_address` | Yes* | Address/city to search near (auto-geocoded) |
+# MAGIC | `latitude` | Yes* | Center latitude (e.g., "52.5200") |
+# MAGIC | `longitude` | Yes* | Center longitude (e.g., "13.4050") |
+# MAGIC | `radius` | Yes | Search radius in meters (max 50000) |
+# MAGIC | `included_types` | No | Comma-separated place types to include |
+# MAGIC | `excluded_types` | No | Comma-separated place types to exclude |
+# MAGIC | `language_code` | No | Language for results (e.g., "en") |
+# MAGIC | `max_result_count` | No | Results per page (1-20, default 20) |
+# MAGIC | `rank_preference` | No | Ranking: "DISTANCE" or "POPULARITY" |
+# MAGIC 
+# MAGIC *Requires `radius` + ONE of: `location_address` OR (`latitude` + `longitude`)
 # MAGIC 
 # MAGIC ### Geocoder Table Options
 # MAGIC | Option | Required | Description |
