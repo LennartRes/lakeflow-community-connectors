@@ -359,8 +359,8 @@ register_lakeflow_source(spark)
 # COMMAND ----------
 
 # Choose your pipeline spec (uncomment one):
-pipeline_spec = combined_pipeline_spec          # Full combined example
-# pipeline_spec = places_example                # Places - text search
+# pipeline_spec = combined_pipeline_spec          # Full combined example
+pipeline_spec = places_example                # Places - text search
 # pipeline_spec = places_nearby_example         # Places - nearby search (by coordinates)
 # pipeline_spec = places_nearby_address_example # Places - nearby search (by address)
 # pipeline_spec = geocoder_forward_example      # Forward geocoding (address to coords)
