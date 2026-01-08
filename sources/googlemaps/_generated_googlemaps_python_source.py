@@ -235,8 +235,8 @@ def register_lakeflow_source(spark):
             self.places_base_url = "https://places.googleapis.com/v1"
             self.maps_base_url = "https://maps.googleapis.com/maps/api"
 
-            # Default field mask for Places API requests
-            self._default_field_mask = ",".join([
+            # Base field mask for Places API requests (without nextPageToken)
+            self._places_field_mask = ",".join([
                 "places.id",
                 "places.displayName",
                 "places.formattedAddress",
@@ -284,8 +284,13 @@ def register_lakeflow_source(spark):
                 "places.paymentOptions",
                 "places.plusCode",
                 "places.adrFormatAddress",
-                "nextPageToken",
             ])
+
+            # Field mask for Text Search (includes nextPageToken for pagination)
+            self._text_search_field_mask = self._places_field_mask + ",nextPageToken"
+
+            # Field mask for Nearby Search (no nextPageToken - uses different pagination)
+            self._nearby_search_field_mask = self._places_field_mask
 
             # =====================
             # Places Schema
@@ -737,7 +742,7 @@ def register_lakeflow_source(spark):
                         headers={
                             "Content-Type": "application/json",
                             "X-Goog-Api-Key": self.api_key,
-                            "X-Goog-FieldMask": self._default_field_mask,
+                            "X-Goog-FieldMask": self._text_search_field_mask,
                         },
                         json=current_body,
                     )
@@ -917,7 +922,7 @@ def register_lakeflow_source(spark):
                         headers={
                             "Content-Type": "application/json",
                             "X-Goog-Api-Key": self.api_key,
-                            "X-Goog-FieldMask": self._default_field_mask,
+                            "X-Goog-FieldMask": self._nearby_search_field_mask,
                         },
                         json=current_body,
                     )
