@@ -9,7 +9,7 @@ Google Maps Places API uses API Key authentication. The API key is passed as a q
 **Authentication Parameters:**
 | Parameter | Location | Required | Description |
 |-----------|----------|----------|-------------|
-| `key` | Query parameter | Yes | Your Google Maps Platform API key |
+| `api_key` | Query parameter | Yes | Your Google Maps Platform API key |
 
 **Alternative:** The API key can also be passed in the `X-Goog-Api-Key` header.
 
