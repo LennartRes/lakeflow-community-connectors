@@ -55,7 +55,8 @@ spark.sql(f"CREATE SCHEMA IF NOT EXISTS {TARGET_CATALOG}.{TARGET_SCHEMA}")
 
 # COMMAND ----------
 
-from pyspark.sql.functions import col, explode, explode_outer, lit, when, size
+from pyspark.sql.functions import col, explode, explode_outer, lit, when, size, from_json
+from pyspark.sql.types import StructType, StructField, StringType, DoubleType, LongType
 
 # Read places raw data
 places_raw = spark.table(f"{SOURCE_CATALOG}.{SOURCE_SCHEMA}.{PLACES_TABLE}")
@@ -405,42 +406,110 @@ print(f"✅ Created: {TARGET_CATALOG}.{TARGET_SCHEMA}.geocoder_address_parsed")
 
 # MAGIC %md
 # MAGIC ### 3.1 Distance Matrix - Core Flattened Table
+# MAGIC 
+# MAGIC Note: The distance, duration, and fare fields may be stored as JSON strings or structs
+# MAGIC depending on how the data was ingested. This handles both cases.
 
 # COMMAND ----------
 
 # Read distance matrix raw data
 distance_matrix_raw = spark.table(f"{SOURCE_CATALOG}.{SOURCE_SCHEMA}.{DISTANCE_MATRIX_TABLE}")
 
-# Flatten distance matrix
-distance_matrix_flattened = distance_matrix_raw.select(
-    # Keys
-    col("origin_index"),
-    col("destination_index"),
+# Check the schema to determine how to parse the fields
+distance_schema = distance_matrix_raw.schema
+
+# Define schemas for JSON parsing (if fields are stored as strings)
+distance_value_schema = StructType([
+    StructField("value", StringType(), True),
+    StructField("text", StringType(), True),
+])
+
+fare_schema = StructType([
+    StructField("currency", StringType(), True),
+    StructField("value", StringType(), True),
+    StructField("text", StringType(), True),
+])
+
+# Check if distance field is a string (JSON) or already a struct
+distance_field_type = str(distance_schema["distance"].dataType)
+
+if "StringType" in distance_field_type:
+    # Fields are JSON strings - need to parse them
+    distance_matrix_parsed = distance_matrix_raw.select(
+        # Keys
+        col("origin_index"),
+        col("destination_index"),
+        
+        # Addresses
+        col("origin_address"),
+        col("destination_address"),
+        
+        # Status
+        col("status"),
+        
+        # Parse JSON strings to structs
+        from_json(col("distance"), distance_value_schema).alias("distance_parsed"),
+        from_json(col("duration"), distance_value_schema).alias("duration_parsed"),
+        from_json(col("duration_in_traffic"), distance_value_schema).alias("duration_in_traffic_parsed"),
+        from_json(col("fare"), fare_schema).alias("fare_parsed"),
+    )
     
-    # Addresses
-    col("origin_address"),
-    col("destination_address"),
-    
-    # Status
-    col("status"),
-    
-    # Distance (nested struct)
-    col("distance.value").alias("distance_meters"),
-    col("distance.text").alias("distance_text"),
-    
-    # Duration (nested struct)
-    col("duration.value").alias("duration_seconds"),
-    col("duration.text").alias("duration_text"),
-    
-    # Duration in traffic (nested struct, may be null)
-    col("duration_in_traffic.value").alias("duration_in_traffic_seconds"),
-    col("duration_in_traffic.text").alias("duration_in_traffic_text"),
-    
-    # Fare (nested struct, transit mode only, may be null)
-    col("fare.currency").alias("fare_currency"),
-    col("fare.value").alias("fare_value"),
-    col("fare.text").alias("fare_text"),
-)
+    # Extract values from parsed structs
+    distance_matrix_flattened = distance_matrix_parsed.select(
+        col("origin_index"),
+        col("destination_index"),
+        col("origin_address"),
+        col("destination_address"),
+        col("status"),
+        
+        # Distance - cast value from string to long
+        col("distance_parsed.value").cast("long").alias("distance_meters"),
+        col("distance_parsed.text").alias("distance_text"),
+        
+        # Duration - cast value from string to long
+        col("duration_parsed.value").cast("long").alias("duration_seconds"),
+        col("duration_parsed.text").alias("duration_text"),
+        
+        # Duration in traffic
+        col("duration_in_traffic_parsed.value").cast("long").alias("duration_in_traffic_seconds"),
+        col("duration_in_traffic_parsed.text").alias("duration_in_traffic_text"),
+        
+        # Fare
+        col("fare_parsed.currency").alias("fare_currency"),
+        col("fare_parsed.value").cast("double").alias("fare_value"),
+        col("fare_parsed.text").alias("fare_text"),
+    )
+else:
+    # Fields are already structs - access directly
+    distance_matrix_flattened = distance_matrix_raw.select(
+        # Keys
+        col("origin_index"),
+        col("destination_index"),
+        
+        # Addresses
+        col("origin_address"),
+        col("destination_address"),
+        
+        # Status
+        col("status"),
+        
+        # Distance (nested struct)
+        col("distance.value").alias("distance_meters"),
+        col("distance.text").alias("distance_text"),
+        
+        # Duration (nested struct)
+        col("duration.value").alias("duration_seconds"),
+        col("duration.text").alias("duration_text"),
+        
+        # Duration in traffic (nested struct, may be null)
+        col("duration_in_traffic.value").alias("duration_in_traffic_seconds"),
+        col("duration_in_traffic.text").alias("duration_in_traffic_text"),
+        
+        # Fare (nested struct, transit mode only, may be null)
+        col("fare.currency").alias("fare_currency"),
+        col("fare.value").alias("fare_value"),
+        col("fare.text").alias("fare_text"),
+    )
 
 # Add calculated fields
 distance_matrix_flattened = distance_matrix_flattened.withColumn(
