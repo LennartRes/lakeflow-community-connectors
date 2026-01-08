@@ -1,0 +1,27 @@
+# googlemaps Community Connector Spec
+# This file defines the specification for the connector including
+# connection parameters and allowlist options.
+
+# ============================================================================
+# Connection Parameters
+# These are provided when creating the Unity Catalog connection.
+# ============================================================================
+connection:
+  parameters:
+    - name: api_key
+      type: string
+      required: true
+      description: >
+        Google Maps Platform API key used for authentication.
+        Must have the Places API (New) enabled. Obtain from the Google Cloud Console
+        under APIs & Services > Credentials.
+
+# ============================================================================
+# External Options Allowlist
+# These table-specific options must be included in the externalOptionsAllowList
+# parameter of the UC connection to allow them to be passed through.
+# Use a comma-separated string of option names.
+# If no table-specific options are needed, set to empty string or omit.
+# ============================================================================
+external_options_allowlist: "text_query,language_code,max_result_count,included_type,min_rating,open_now,region_code"
+

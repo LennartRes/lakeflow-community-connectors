@@ -12,17 +12,13 @@ This documentation provides setup instructions and reference information for the
 
 ### Required Connection Parameters
 
-To configure the connector, provide the following parameters in your connector options:
+To configure the connector, provide the following parameter in your connector options:
 
 | Name | Type | Required | Description | Example |
 |------|------|----------|-------------|---------|
 | `api_key` | string | Yes | Google Maps Platform API key | `AIzaSyD...` |
-| `externalOptionsAllowList` | string | Yes | Comma-separated list of table-specific option names allowed to be passed to the connector | `text_query,language_code,max_result_count,included_type,min_rating,open_now,region_code` |
 
-The full list of supported table-specific options for `externalOptionsAllowList` is:
-`text_query,language_code,max_result_count,included_type,min_rating,open_now,region_code`
-
-> **Note**: Table-specific options like `text_query` are **not** connection parameters. They are provided per-table via table options in the pipeline specification. These option names must be included in `externalOptionsAllowList` for the connection to allow them.
+> **Note**: The `externalOptionsAllowList` is automatically configured via the connector specification (`connector_spec.yaml`). You do not need to set it manually.
 
 ### Obtaining Your API Key
 
@@ -46,7 +42,6 @@ A Unity Catalog connection for this connector can be created in two ways via the
 
 1. Follow the **Lakeflow Community Connector** UI flow from the **Add Data** page
 2. Select any existing Lakeflow Community Connector connection for this source or create a new one
-3. Set `externalOptionsAllowList` to `text_query,language_code,max_result_count,included_type,min_rating,open_now,region_code` (required for this connector to pass table-specific options)
 
 The connection can also be created using the standard Unity Catalog API.
 
@@ -206,7 +201,6 @@ Since the connector uses snapshot ingestion:
 
 **Missing Required Parameter Error:**
 - Ensure `text_query` is provided for every `places` table entry in your pipeline spec
-- Verify `externalOptionsAllowList` includes `text_query` in your connection configuration
 
 **Rate Limiting:**
 - The Places API has usage quotas—check your Google Cloud Console for current limits
@@ -219,6 +213,7 @@ Since the connector uses snapshot ingestion:
 ## References
 
 - **Connector Implementation**: `sources/googlemaps/googlemaps.py`
+- **Connector Specification**: `sources/googlemaps/connector_spec.yaml`
 - **API Documentation**: `sources/googlemaps/googlemaps_api_doc.md`
 - **Official Google Documentation**:
   - [Places API Overview](https://developers.google.com/maps/documentation/places/web-service)
