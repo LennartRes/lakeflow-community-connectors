@@ -26,36 +26,53 @@ source_name = "googlemaps"
 pipeline_spec = {
     "connection_name": "googlemaps",
     "objects": [
-        # Minimal config: just specify the source table
-        # {
-        #     "table": {
-        #         "source_table": "places",
-        #         "table_configuration": {
-        #             "text_query": "Restaurants in Berlin",
-        #             "scd_type": "APPEND_ONLY"
-        #         },
-        #     }
-        # },
-        # Full config: customize destination and behavior
+        {
+            "table": {
+                "source_table": "geocoder",
+                "destination_catalog": "googlemaps",
+                "destination_schema": "geocoding",
+                "destination_table": "geocodes",
+                "table_configuration": {
+                    "address": "Köpenicker Str. 41, 10179 Berlin",
+                    "scd_type": "APPEND_ONLY",
+                },
+            }
+        },
         {
             "table": {
                 "source_table": "places",
                 "destination_catalog": "googlemaps",
                 "destination_schema": "places",
-                "destination_table": "restaurants_berlin",
+                "destination_table": "gas_stations_berlin",
                 "table_configuration": {
-                    "text_query": "Restaurants in Berlin",
-                    "scd_type": "APPEND_ONLY",
+                    "text_query": "Gas station in Berlin",
+                    "scd_type": "SCD_TYPE_1",
                     "primary_keys": ["id"],
                     "language_code": "en",
                     "max_result_count": "20",
-                    "included_type": "restaurant",
+                    "included_type": "gas_station",
                     "min_rating": "4.0",
-                    "open_now": "true",
                     "region_code": "DE"
                 },
             }
         },
+        {
+            "table": {
+                "source_table": "distance_matrix",
+                "destination_catalog": "googlemaps",
+                "destination_schema": "distance_matrix",
+                "destination_table": "distances",
+                "table_configuration": {
+                    "origins": ["Köpenicker Str. 41, 10179 Berlin"],
+                    "destinations": ["Kurfürstendamm 1, 10785 Berlin"],
+                    "mode": "driving",
+                    "departure_time": "now",
+                    "traffic_model": "best_guess",
+                    "units": "metric",
+                    "language_code": "en"
+                }
+            }
+        }
     ],
 }
 
