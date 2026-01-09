@@ -387,7 +387,9 @@ def register_lakeflow_source(spark):
                 StructField("displayName", self._display_name_schema, True),
                 StructField("formattedAddress", StringType(), True),
                 StructField("shortFormattedAddress", StringType(), True),
-                StructField("addressComponents", ArrayType(self._places_address_component_schema), True),
+                StructField(
+                    "addressComponents", ArrayType(self._places_address_component_schema), True
+                ),
                 StructField("location", self._places_location_schema, True),
                 StructField("viewport", self._places_viewport_schema, True),
                 StructField("googleMapsUri", StringType(), True),
@@ -473,7 +475,9 @@ def register_lakeflow_source(spark):
             self._geocoder_schema = StructType([
                 StructField("place_id", StringType(), False),
                 StructField("formatted_address", StringType(), True),
-                StructField("address_components", ArrayType(self._geocoder_address_component_schema), True),
+                StructField(
+                    "address_components", ArrayType(self._geocoder_address_component_schema), True
+                ),
                 StructField("geometry", self._geocoder_geometry_schema, True),
                 StructField("types", ArrayType(StringType()), True),
                 StructField("partial_match", BooleanType(), True),

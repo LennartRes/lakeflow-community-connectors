@@ -229,7 +229,9 @@ if places_raw is not None:
         col("component.languageCode").alias("language_code"),
     )
 
-    safe_write_table(places_address_components, TARGET_CATALOG, TARGET_SCHEMA, "places_address_components")
+    safe_write_table(
+        places_address_components, TARGET_CATALOG, TARGET_SCHEMA, "places_address_components"
+    )
 
 # COMMAND ----------
 
@@ -356,7 +358,9 @@ if geocoder_table_ready:
         col("component.types").alias("component_types"),
     )
 
-    safe_write_table(geocoder_address_components, TARGET_CATALOG, TARGET_SCHEMA, "geocoder_address_components")
+    safe_write_table(
+        geocoder_address_components, TARGET_CATALOG, TARGET_SCHEMA, "geocoder_address_components"
+    )
 
 # COMMAND ----------
 
@@ -424,7 +428,9 @@ if geocoder_table_ready:
         geocoder_base.unpersist()
         geocoder_exploded.unpersist()
 
-        safe_write_table(geocoder_address_parsed, TARGET_CATALOG, TARGET_SCHEMA, "geocoder_address_parsed")
+        safe_write_table(
+            geocoder_address_parsed, TARGET_CATALOG, TARGET_SCHEMA, "geocoder_address_parsed"
+        )
 
     except Exception as e:
         print(f"Warning: Could not create geocoder_address_parsed: {str(e)}")
@@ -436,7 +442,9 @@ if geocoder_table_ready:
                 col("geometry.location.lat").alias("latitude"),
                 col("geometry.location.lng").alias("longitude"),
             )
-            safe_write_table(geocoder_address_simple, TARGET_CATALOG, TARGET_SCHEMA, "geocoder_address_parsed")
+            safe_write_table(
+                geocoder_address_simple, TARGET_CATALOG, TARGET_SCHEMA, "geocoder_address_parsed"
+            )
         except Exception as e2:
             print(f"Warning: Fallback also failed: {str(e2)}")
 
@@ -512,7 +520,9 @@ else:
              (col("duration_in_traffic_seconds") - col("duration_seconds")) / 60.0)
     )
 
-    safe_write_table(distance_matrix_flattened, TARGET_CATALOG, TARGET_SCHEMA, "distance_matrix_flattened")
+    safe_write_table(
+        distance_matrix_flattened, TARGET_CATALOG, TARGET_SCHEMA, "distance_matrix_flattened"
+    )
 
 # COMMAND ----------
 

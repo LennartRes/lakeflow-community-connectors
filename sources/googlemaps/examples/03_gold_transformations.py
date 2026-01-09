@@ -134,7 +134,10 @@ def haversine_distance(lat1, lon1, lat2, lon2):
 places_table_ready = table_has_data(SILVER_CATALOG, SILVER_SCHEMA, "places_flattened")
 
 if not places_table_ready:
-    print(f"Skipping places intelligence: {SILVER_CATALOG}.{SILVER_SCHEMA}.places_flattened not found or empty")
+    print(
+        f"Skipping places intelligence: "
+        f"{SILVER_CATALOG}.{SILVER_SCHEMA}.places_flattened not found or empty"
+    )
     print("Run 02_silver_transformations.py with places data first.")
 
 # COMMAND ----------
@@ -277,10 +280,15 @@ if places_table_ready:
 # COMMAND ----------
 
 # Check if distance_matrix_flattened table exists and has data
-distance_matrix_table_ready = table_has_data(SILVER_CATALOG, SILVER_SCHEMA, "distance_matrix_flattened")
+distance_matrix_table_ready = table_has_data(
+    SILVER_CATALOG, SILVER_SCHEMA, "distance_matrix_flattened"
+)
 
 if not distance_matrix_table_ready:
-    print(f"Skipping travel analysis: {SILVER_CATALOG}.{SILVER_SCHEMA}.distance_matrix_flattened not found or empty")
+    print(
+        f"Skipping travel analysis: "
+        f"{SILVER_CATALOG}.{SILVER_SCHEMA}.distance_matrix_flattened not found or empty"
+    )
     print("Run 02_silver_transformations.py with distance_matrix data first.")
 
 # COMMAND ----------
@@ -376,7 +384,10 @@ if distance_matrix_table_ready:
 places_intelligence_ready = table_has_data(GOLD_CATALOG, GOLD_SCHEMA, "places_intelligence")
 
 if not places_intelligence_ready:
-    print(f"Skipping location summary: {GOLD_CATALOG}.{GOLD_SCHEMA}.places_intelligence not found or empty")
+    print(
+        f"Skipping location summary: "
+        f"{GOLD_CATALOG}.{GOLD_SCHEMA}.places_intelligence not found or empty"
+    )
     print("Places data must be ingested and processed first.")
 
 # COMMAND ----------
@@ -397,9 +408,11 @@ if places_intelligence_ready:
         spark_round(avg("service_score"), 2).alias("avg_service_score"),
         spark_round(avg("accessibility_score"), 2).alias("avg_accessibility_score"),
         spark_round(avg("overall_score"), 2).alias("avg_overall_score"),
+        # pylint: disable=singleton-comparison
         count(when(col("is_open_now") == True, 1)).alias("currently_open_count"),
         count(when(col("takeout") == True, 1)).alias("offers_takeout_count"),
         count(when(col("delivery") == True, 1)).alias("offers_delivery_count"),
+        # pylint: enable=singleton-comparison
     ).withColumn(
         "reference_location", lit(REFERENCE_LOCATION["name"])
     ).withColumn(
@@ -432,6 +445,7 @@ if places_intelligence_ready:
         spark_round(avg("distance_from_reference_km"), 2).alias("avg_distance_km"),
         spark_round(avg("service_score"), 2).alias("avg_service_score"),
         spark_round(avg("accessibility_score"), 2).alias("avg_accessibility_score"),
+        # pylint: disable-next=singleton-comparison
         count(when(col("is_open_now") == True, 1)).alias("currently_open"),
         spark_round(spark_min("rating"), 2).alias("min_rating"),
         spark_round(spark_max("rating"), 2).alias("max_rating"),
@@ -543,7 +557,10 @@ geocoder_flat_ready = table_has_data(SILVER_CATALOG, SILVER_SCHEMA, "geocoder_fl
 geocoder_parsed_ready = table_has_data(SILVER_CATALOG, SILVER_SCHEMA, "geocoder_address_parsed")
 
 if not geocoder_flat_ready:
-    print(f"Skipping geocoder enriched: {SILVER_CATALOG}.{SILVER_SCHEMA}.geocoder_flattened not found or empty")
+    print(
+        f"Skipping geocoder enriched: "
+        f"{SILVER_CATALOG}.{SILVER_SCHEMA}.geocoder_flattened not found or empty"
+    )
     print("Run 02_silver_transformations.py with geocoder data first.")
 
 # COMMAND ----------
