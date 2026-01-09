@@ -130,14 +130,14 @@ class TestMissingRequiredFields:
         assert "'objects' must contain at least one table" in str(exc_info.value)
 
     def test_missing_table_key(self):
-        """Test error when table key is missing in object."""
+        """Test error when table or matrix key is missing in object."""
         spec = {
             "connection_name": "my_connection",
             "objects": [{"not_table": {"source_table": "users"}}],
         }
         with pytest.raises(PipelineSpecValidationError) as exc_info:
             validate_pipeline_spec(spec)
-        assert "'table' is required" in str(exc_info.value)
+        assert "'table' or 'matrix' is required" in str(exc_info.value)
 
     def test_missing_source_table(self):
         """Test error when source_table is missing."""
