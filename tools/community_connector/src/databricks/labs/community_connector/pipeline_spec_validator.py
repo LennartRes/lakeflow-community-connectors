@@ -89,6 +89,8 @@ def _validate_object(obj: dict, path: str) -> list[str]:
     """
     Validate a single object in the objects list.
 
+    Supports both 'table' objects and 'matrix' objects (for multi-parameter expansion).
+
     Args:
         obj: The object dictionary to validate.
         path: Path for error messages.
@@ -104,9 +106,22 @@ def _validate_object(obj: dict, path: str) -> list[str]:
     if not isinstance(obj, dict):
         raise PipelineSpecValidationError("Each object must be a dictionary", path)
 
-    # Must have 'table' key
-    if "table" not in obj:
-        raise PipelineSpecValidationError("'table' is required", path)
+    # Must have either 'table' or 'matrix' key
+    if "table" not in obj and "matrix" not in obj:
+        raise PipelineSpecValidationError("'table' or 'matrix' is required", path)
+
+    # If it's a matrix object, validate matrix structure
+    if "matrix" in obj:
+        matrix_warnings = _validate_matrix(obj["matrix"], f"{path}.matrix")
+        warnings.extend(matrix_warnings)
+        # Warn about unknown keys in object
+        known_obj_keys = {"matrix"}
+        unknown_obj_keys = set(obj.keys()) - known_obj_keys
+        if unknown_obj_keys:
+            warnings.append(f"Unknown keys in '{path}' will be ignored: {unknown_obj_keys}")
+        return warnings
+
+    # Validate table object (existing logic below)
 
     table = obj["table"]
     table_path = f"{path}.table"
@@ -207,6 +222,97 @@ def _validate_table_configuration(config: dict, path: str) -> list[str]:
                 raise PipelineSpecValidationError(
                     f"'primary_keys[{i}]' must be a string", f"{path}.primary_keys[{i}]"
                 )
+
+    return warnings
+
+
+def _validate_matrix(matrix: dict, path: str) -> list[str]:
+    """
+    Validate a matrix object for multi-parameter table expansion.
+
+    Args:
+        matrix: The matrix dictionary to validate.
+        path: Path for error messages.
+
+    Returns:
+        List of warning messages.
+
+    Raises:
+        PipelineSpecValidationError: If validation fails.
+    """
+    warnings = []
+
+    if not isinstance(matrix, dict):
+        raise PipelineSpecValidationError("'matrix' must be a dictionary", path)
+
+    # source_table is required
+    if "source_table" not in matrix:
+        raise PipelineSpecValidationError("'source_table' is required", path)
+
+    if not isinstance(matrix["source_table"], str) or not matrix["source_table"].strip():
+        raise PipelineSpecValidationError(
+            "'source_table' must be a non-empty string", f"{path}.source_table"
+        )
+
+    # parameters is required and must be a non-empty list
+    if "parameters" not in matrix:
+        raise PipelineSpecValidationError("'parameters' is required for matrix", path)
+
+    params = matrix["parameters"]
+    if not isinstance(params, list):
+        raise PipelineSpecValidationError(
+            "'parameters' must be a list", f"{path}.parameters"
+        )
+
+    if len(params) == 0:
+        raise PipelineSpecValidationError(
+            "'parameters' must contain at least one entry", f"{path}.parameters"
+        )
+
+    for i, param in enumerate(params):
+        if not isinstance(param, dict):
+            raise PipelineSpecValidationError(
+                f"'parameters[{i}]' must be a dictionary", f"{path}.parameters[{i}]"
+            )
+
+    # common_config is optional but must be a dict if present
+    if "common_config" in matrix:
+        if not isinstance(matrix["common_config"], dict):
+            raise PipelineSpecValidationError(
+                "'common_config' must be a dictionary", f"{path}.common_config"
+            )
+        # Validate scd_type if present in common_config
+        if "scd_type" in matrix["common_config"]:
+            scd_type = matrix["common_config"]["scd_type"]
+            if not isinstance(scd_type, str):
+                raise PipelineSpecValidationError(
+                    "'scd_type' must be a string", f"{path}.common_config.scd_type"
+                )
+            if scd_type not in VALID_SCD_TYPES:
+                raise PipelineSpecValidationError(
+                    f"'scd_type' must be one of {VALID_SCD_TYPES}, got '{scd_type}'",
+                    f"{path}.common_config.scd_type",
+                )
+
+    # destination is optional but must be a dict if present
+    if "destination" in matrix:
+        dest = matrix["destination"]
+        if not isinstance(dest, dict):
+            raise PipelineSpecValidationError(
+                "'destination' must be a dictionary", f"{path}.destination"
+            )
+        # Validate optional string fields in destination
+        for field in ["catalog", "schema", "table_template"]:
+            if field in dest and not isinstance(dest[field], str):
+                raise PipelineSpecValidationError(
+                    f"'{field}' must be a string", f"{path}.destination.{field}"
+                )
+
+    # Warn about unknown keys in matrix
+    known_matrix_keys = {"source_table", "parameters", "common_config", "destination"}
+    unknown_matrix_keys = set(matrix.keys()) - known_matrix_keys
+    if unknown_matrix_keys:
+        warnings.append(f"Unknown keys in '{path}' will be ignored: {unknown_matrix_keys}")
 
     return warnings
 

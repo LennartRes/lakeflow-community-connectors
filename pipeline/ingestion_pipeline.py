@@ -49,7 +49,8 @@ def _create_cdc_table(
 
     # Delete flow - only enabled for cdc_with_deletes ingestion type
     if config.with_deletes:
-        delete_view_name = config.source_table + "_delete_staging"
+        # Use view_name base (which is destination-based) for uniqueness
+        delete_view_name = config.view_name.replace("_staging", "_delete_staging")
 
         @sdp.view(name=delete_view_name)
         def delete_view():
@@ -137,37 +138,55 @@ def _get_table_metadata(
 
 
 def ingest(spark, pipeline_spec: dict) -> None:
-    """Ingest a list of tables"""
+    """Ingest a list of tables.
+
+    Supports multiple objects with the same source_table but different configurations
+    (e.g., places for Berlin vs places for Munich). Each object gets a unique view
+    based on its destination_table name.
+    """
 
     # parse the pipeline spec
     spec = SpecParser(pipeline_spec)
     connection_name = spec.connection_name()
-    table_list = spec.get_table_list()
 
-    # Get table_configurations for all tables. These are merged into one dict
-    # keyed by table name.
+    # Get unique source tables for metadata fetching (avoids duplicate API calls)
+    unique_source_tables = spec.get_unique_source_tables()
+
+    # Get table_configurations for unique source tables (for metadata API)
+    # Note: We use the first configuration found for each source table for metadata.
+    # Individual object configurations are applied during ingestion.
     table_configs = spec.get_table_configurations()
-    metadata = _get_table_metadata(spark, connection_name, table_list, table_configs)
+    metadata = _get_table_metadata(spark, connection_name, unique_source_tables, table_configs)
 
-    def _ingest_table(table: str) -> None:
-        """Helper function to ingest a single table"""
-        primary_keys = metadata[table].get("primary_keys")
-        cursor_field = metadata[table].get("cursor_field")
-        ingestion_type = metadata[table].get("ingestion_type", "cdc")
-        view_name = table + "_staging"
-        table_config = spec.get_table_configuration(table)
-        destination_table = spec.get_full_destination_table_name(table)
+    def _ingest_object(index: int) -> None:
+        """Helper function to ingest a single object by index."""
+        source_table = spec.get_source_table_by_index(index)
+        dest_table_name = spec.get_destination_table_by_index(index)
 
-        # Override parameters with spec values if available
-        primary_keys = spec.get_primary_keys(table) or primary_keys
-        sequence_by = spec.get_sequence_by(table) or cursor_field
-        scd_type_raw = spec.get_scd_type(table)
+        # Get metadata from source table (same for all objects with this source)
+        table_metadata = metadata.get(source_table, {})
+        primary_keys = table_metadata.get("primary_keys")
+        cursor_field = table_metadata.get("cursor_field")
+        ingestion_type = table_metadata.get("ingestion_type", "cdc")
+
+        # Use destination table name for view to ensure uniqueness
+        # This allows multiple objects with the same source_table
+        view_name = dest_table_name + "_staging"
+
+        # Get object-specific configuration by index
+        table_config = spec.get_table_configuration_by_index(index)
+        destination_table = spec.get_full_destination_table_name_by_index(index)
+
+        # Override parameters with spec values if available (by index)
+        primary_keys = spec.get_primary_keys_by_index(index) or primary_keys
+        sequence_by = spec.get_sequence_by_by_index(index) or cursor_field
+        scd_type_raw = spec.get_scd_type_by_index(index)
         if scd_type_raw == "APPEND_ONLY":
             ingestion_type = "append"
         scd_type = "2" if scd_type_raw == "SCD_TYPE_2" else "1"
 
         config = SdpTableConfig(
-            source_table=table,
+            source_table=source_table,
             destination_table=destination_table,
             view_name=view_name,
             table_config=table_config,
@@ -188,5 +207,6 @@ def ingest(spark, pipeline_spec: dict) -> None:
         elif ingestion_type == "append":
             _create_append_table(spark, connection_name, config)
 
-    for table_name in table_list:
-        _ingest_table(table_name)
+    # Iterate over all objects by index to support multiple same-source tables
+    for i in range(spec.get_object_count()):
+        _ingest_object(i)
