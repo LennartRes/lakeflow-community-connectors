@@ -33,7 +33,7 @@ class LakeflowConnect:  # pylint: disable=too-many-instance-attributes
         self.api_key = options["api_key"]
         self.places_base_url = "https://places.googleapis.com/v1"
         self.maps_base_url = "https://maps.googleapis.com/maps/api"
-        
+
         # Base field mask for Places API requests (without nextPageToken)
         self._places_field_mask = ",".join([
             "places.id",
@@ -84,17 +84,17 @@ class LakeflowConnect:  # pylint: disable=too-many-instance-attributes
             "places.plusCode",
             "places.adrFormatAddress",
         ])
-        
+
         # Field mask for Text Search (includes nextPageToken for pagination)
         self._text_search_field_mask = self._places_field_mask + ",nextPageToken"
-        
+
         # Field mask for Nearby Search (no nextPageToken - uses different pagination)
         self._nearby_search_field_mask = self._places_field_mask
 
         # =====================
         # Places Schema
         # =====================
-        
+
         # Nested schema for displayName
         self._display_name_schema = StructType([
             StructField("text", StringType(), True),
@@ -186,7 +186,9 @@ class LakeflowConnect:  # pylint: disable=too-many-instance-attributes
             StructField("displayName", self._display_name_schema, True),
             StructField("formattedAddress", StringType(), True),
             StructField("shortFormattedAddress", StringType(), True),
-            StructField("addressComponents", ArrayType(self._places_address_component_schema), True),
+            StructField(
+                "addressComponents", ArrayType(self._places_address_component_schema), True
+            ),
             StructField("location", self._places_location_schema, True),
             StructField("viewport", self._places_viewport_schema, True),
             StructField("googleMapsUri", StringType(), True),
@@ -234,7 +236,7 @@ class LakeflowConnect:  # pylint: disable=too-many-instance-attributes
         # =====================
         # Geocoder Schema
         # =====================
-        
+
         # Nested schema for geocoder location (lat/lng format)
         self._geocoder_location_schema = StructType([
             StructField("lat", DoubleType(), True),
@@ -272,7 +274,9 @@ class LakeflowConnect:  # pylint: disable=too-many-instance-attributes
         self._geocoder_schema = StructType([
             StructField("place_id", StringType(), False),
             StructField("formatted_address", StringType(), True),
-            StructField("address_components", ArrayType(self._geocoder_address_component_schema), True),
+            StructField(
+                "address_components", ArrayType(self._geocoder_address_component_schema), True
+            ),
             StructField("geometry", self._geocoder_geometry_schema, True),
             StructField("types", ArrayType(StringType()), True),
             StructField("partial_match", BooleanType(), True),
@@ -283,7 +287,7 @@ class LakeflowConnect:  # pylint: disable=too-many-instance-attributes
         # =====================
         # Distance Matrix Schema
         # =====================
-        
+
         # Nested schema for distance/duration value
         self._distance_value_schema = StructType([
             StructField("value", LongType(), True),
@@ -443,7 +447,7 @@ class LakeflowConnect:  # pylint: disable=too-many-instance-attributes
                 - min_rating: Optional. Minimum average rating filter
                 - open_now: Optional. Only return places open now ("true"/"false")
                 - region_code: Optional. Region code for biasing (e.g., "US")
-                
+
                 NEARBY SEARCH MODE (use location_address OR latitude+longitude, plus radius):
                 - location_address: Address/city to search near (e.g., "Berlin, Germany")
                 - latitude: Center latitude for nearby search (e.g., "52.5200")
@@ -464,25 +468,25 @@ class LakeflowConnect:  # pylint: disable=too-many-instance-attributes
         latitude = table_options.get("latitude")
         longitude = table_options.get("longitude")
         radius = table_options.get("radius")
-        
+
         # Check for nearby search parameters
         has_coords = latitude and longitude
         has_location_address = bool(location_address)
         has_nearby_params = (has_coords or has_location_address) and radius
-        
+
         # Validate conflicting parameters
         if text_query and has_nearby_params:
             raise ValueError(
                 "Cannot use both 'text_query' and nearby search parameters. "
                 "Choose one search mode: text search OR nearby search."
             )
-        
+
         if has_location_address and has_coords:
             raise ValueError(
                 "Cannot use both 'location_address' and 'latitude/longitude'. "
                 "Choose one: provide an address OR coordinates."
             )
-        
+
         if not text_query and not has_nearby_params:
             raise ValueError(
                 "table_options must include either:\n"
@@ -490,7 +494,7 @@ class LakeflowConnect:  # pylint: disable=too-many-instance-attributes
                 "  - 'location_address' + 'radius' for nearby search (address-based), OR\n"
                 "  - 'latitude' + 'longitude' + 'radius' for nearby search (coordinates)"
             )
-        
+
         if has_nearby_params:
             return self._read_places_nearby(table_options)
         else:
@@ -503,7 +507,7 @@ class LakeflowConnect:  # pylint: disable=too-many-instance-attributes
         Read places using Text Search API.
         """
         text_query = table_options.get("text_query")
-        
+
         # Build request parameters
         request_body = {
             "textQuery": text_query,
@@ -512,19 +516,19 @@ class LakeflowConnect:  # pylint: disable=too-many-instance-attributes
         # Add optional parameters
         if "language_code" in table_options:
             request_body["languageCode"] = table_options["language_code"]
-        
+
         if "max_result_count" in table_options:
             request_body["maxResultCount"] = int(table_options["max_result_count"])
-        
+
         if "included_type" in table_options:
             request_body["includedType"] = table_options["included_type"]
-        
+
         if "min_rating" in table_options:
             request_body["minRating"] = float(table_options["min_rating"])
-        
+
         if "open_now" in table_options:
             request_body["openNow"] = table_options["open_now"].lower() == "true"
-        
+
         if "region_code" in table_options:
             request_body["regionCode"] = table_options["region_code"]
 
@@ -573,14 +577,14 @@ class LakeflowConnect:  # pylint: disable=too-many-instance-attributes
     ) -> Dict[str, float]:
         """
         Geocode an address to lat/lng coordinates using the Geocoding API.
-        
+
         Args:
             address: Address string to geocode (e.g., "Berlin, Germany")
             table_options: Additional options that may contain language_code
-        
+
         Returns:
             Dictionary with 'lat' and 'lng' keys
-        
+
         Raises:
             ValueError: If geocoding returns no results
             Exception: If API call fails
@@ -589,25 +593,25 @@ class LakeflowConnect:  # pylint: disable=too-many-instance-attributes
             "key": self.api_key,
             "address": address,
         }
-        
+
         # Pass through language if provided
         if "language_code" in table_options:
             params["language"] = table_options["language_code"]
-        
+
         response = requests.get(
             f"{self.maps_base_url}/geocode/json",
             params=params,
         )
-        
+
         if response.status_code != 200:
             raise Exception(
                 f"Google Geocoding API error while geocoding '{address}': "
                 f"{response.status_code} {response.text}"
             )
-        
+
         data = response.json()
         status = data.get("status")
-        
+
         if status == "ZERO_RESULTS":
             raise ValueError(
                 f"Could not geocode address '{address}': No results found. "
@@ -618,24 +622,24 @@ class LakeflowConnect:  # pylint: disable=too-many-instance-attributes
                 f"Google Geocoding API error for '{address}': status={status}, "
                 f"error_message={data.get('error_message', 'Unknown error')}"
             )
-        
+
         results = data.get("results", [])
         if not results:
             raise ValueError(
                 f"Could not geocode address '{address}': Empty results. "
                 "Please provide a more specific address."
             )
-        
+
         # Use the first result's location
         location = results[0].get("geometry", {}).get("location", {})
         lat = location.get("lat")
         lng = location.get("lng")
-        
+
         if lat is None or lng is None:
             raise ValueError(
                 f"Could not extract coordinates from geocoding result for '{address}'"
             )
-        
+
         return {"lat": lat, "lng": lng}
 
     def _read_places_nearby(
@@ -643,7 +647,7 @@ class LakeflowConnect:  # pylint: disable=too-many-instance-attributes
     ) -> Tuple[Iterator[Dict], Dict]:
         """
         Read places using Nearby Search API.
-        
+
         Args:
             table_options: Dictionary containing:
                 - location_address: Address to search near (alternative to lat/lng)
@@ -655,13 +659,13 @@ class LakeflowConnect:  # pylint: disable=too-many-instance-attributes
                 - language_code: Optional. Language code for results
                 - max_result_count: Optional. Maximum results (1-20)
                 - rank_preference: Optional. "DISTANCE" or "POPULARITY"
-        
+
         Returns:
             Tuple of (iterator of place records, empty offset dict)
         """
         # Get coordinates - either from location_address or lat/lng
         location_address = table_options.get("location_address")
-        
+
         if location_address:
             # Geocode the address to get coordinates
             coords = self._geocode_address(location_address, table_options)
@@ -671,9 +675,9 @@ class LakeflowConnect:  # pylint: disable=too-many-instance-attributes
             # Use provided coordinates
             latitude = float(table_options["latitude"])
             longitude = float(table_options["longitude"])
-        
+
         radius = float(table_options["radius"])
-        
+
         # Build request body with location restriction
         request_body = {
             "locationRestriction": {
@@ -686,24 +690,24 @@ class LakeflowConnect:  # pylint: disable=too-many-instance-attributes
                 }
             }
         }
-        
+
         # Add optional parameters
         if "included_types" in table_options:
             # Split comma-separated types into array
             types = [t.strip() for t in table_options["included_types"].split(",")]
             request_body["includedTypes"] = types
-        
+
         if "excluded_types" in table_options:
             # Split comma-separated types into array
             types = [t.strip() for t in table_options["excluded_types"].split(",")]
             request_body["excludedTypes"] = types
-        
+
         if "language_code" in table_options:
             request_body["languageCode"] = table_options["language_code"]
-        
+
         if "max_result_count" in table_options:
             request_body["maxResultCount"] = int(table_options["max_result_count"])
-        
+
         if "rank_preference" in table_options:
             request_body["rankPreference"] = table_options["rank_preference"].upper()
 
@@ -788,20 +792,20 @@ class LakeflowConnect:  # pylint: disable=too-many-instance-attributes
         # Add optional parameters
         if "language" in table_options:
             params["language"] = table_options["language"]
-        
+
         if "region" in table_options:
             params["region"] = table_options["region"]
-        
+
         if "bounds" in table_options:
             params["bounds"] = table_options["bounds"]
-        
+
         if "components" in table_options:
             params["components"] = table_options["components"]
 
         # For reverse geocoding, additional filters
         if "result_type" in table_options:
             params["result_type"] = table_options["result_type"]
-        
+
         if "location_type" in table_options:
             params["location_type"] = table_options["location_type"]
 
@@ -882,31 +886,31 @@ class LakeflowConnect:  # pylint: disable=too-many-instance-attributes
         # Add optional parameters
         if "mode" in table_options:
             params["mode"] = table_options["mode"]
-        
+
         if "language" in table_options:
             params["language"] = table_options["language"]
-        
+
         if "region" in table_options:
             params["region"] = table_options["region"]
-        
+
         if "avoid" in table_options:
             params["avoid"] = table_options["avoid"]
-        
+
         if "units" in table_options:
             params["units"] = table_options["units"]
-        
+
         if "departure_time" in table_options:
             params["departure_time"] = table_options["departure_time"]
-        
+
         if "arrival_time" in table_options:
             params["arrival_time"] = table_options["arrival_time"]
-        
+
         if "traffic_model" in table_options:
             params["traffic_model"] = table_options["traffic_model"]
-        
+
         if "transit_mode" in table_options:
             params["transit_mode"] = table_options["transit_mode"]
-        
+
         if "transit_routing_preference" in table_options:
             params["transit_routing_preference"] = table_options["transit_routing_preference"]
 

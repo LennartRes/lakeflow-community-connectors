@@ -1,7 +1,7 @@
 from pipeline.ingestion_pipeline import ingest
 from libs.source_loader import get_register_function
 
-source_name = "googlemaps"
+SOURCE_NAME = "googlemaps"
 
 # =============================================================================
 # INGESTION PIPELINE CONFIGURATION
@@ -96,7 +96,7 @@ pipeline_spec = {
 
 
 # Dynamically import and register the LakeFlow source
-register_lakeflow_source = get_register_function(source_name)
+register_lakeflow_source = get_register_function(SOURCE_NAME)
 register_lakeflow_source(spark)
 
 # Ingest the tables specified in the pipeline spec
