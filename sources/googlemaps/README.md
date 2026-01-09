@@ -308,43 +308,8 @@ Follow the Lakeflow Community Connector UI, which will guide you through setting
       },
       {
         "table": {
-          "source_table": "places",
-          "text_query": "restaurants in San Francisco",
-          "included_type": "restaurant"
-        }
-      },
-      {
-        "table": {
-          "source_table": "places",
-          "latitude": "52.5200",
-          "longitude": "13.4050",
-          "radius": "1500",
-          "included_types": "gas_station",
-          "rank_preference": "DISTANCE",
-          "language_code": "de"
-        }
-      },
-      {
-        "table": {
-          "source_table": "places",
-          "location_address": "Eiffel Tower, Paris, France",
-          "radius": "500",
-          "included_types": "restaurant,cafe",
-          "excluded_types": "bar",
-          "max_result_count": "20"
-        }
-      },
-      {
-        "table": {
           "source_table": "geocoder",
           "address": "1600 Amphitheatre Parkway, Mountain View, CA",
-          "language": "en"
-        }
-      },
-      {
-        "table": {
-          "source_table": "geocoder",
-          "latlng": "47.6062,-122.3321",
           "language": "en"
         }
       },
@@ -355,15 +320,6 @@ Follow the Lakeflow Community Connector UI, which will guide you through setting
           "destinations": "San Francisco, CA|Los Angeles, CA",
           "mode": "driving",
           "units": "metric"
-        }
-      },
-      {
-        "table": {
-          "source_table": "distance_matrix",
-          "origins": "New York, NY",
-          "destinations": "Boston, MA|Philadelphia, PA|Washington, DC",
-          "mode": "transit",
-          "departure_time": "now"
         }
       }
     ]
@@ -395,23 +351,15 @@ Since all tables use snapshot ingestion:
 - Consider staggering syncs across different queries to spread API costs
 - For `distance_matrix` with traffic data, schedule during relevant time windows
 
-## Multi-Instance Ingestion Support
-
-The Google Maps connector supports **multiple ingestions from the same source table** within
-a single pipeline. For example, you can query the `places` table multiple times with different
-parameters (different cities, different place types) and each will create a separate destination table.
-
-This is enabled by the index-based pipeline architecture that uses the **destination table name**
-(not source table name) for unique view naming, avoiding conflicts when the same API endpoint
-is queried multiple times.
-
 ---
 
-## Matrix-Based Table Generation (Advanced)
+## Multi-Instance Ingestion Support with Matrix-Based Table Generation (Advanced)
 
-For scenarios where you need to ingest the same data type across multiple locations,
-the **table matrix** feature allows you to generate multiple destination tables from
-a single connector table using parameter matrices.
+The Google Maps connector supports **multiple ingestions from the same source table**
+within a single pipeline. This is especially helpful for scenarios where you need
+to ingest the same data type across multiple locations. You can achieve it by
+leveraging the **table matrix** feature for generating multiple destination tables
+from a single connector table using parameter matrices.
 
 ### The Problem
 
