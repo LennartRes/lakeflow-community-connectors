@@ -213,7 +213,7 @@ def register_lakeflow_source(spark):
     # sources/googlemaps/googlemaps.py
     ########################################################
 
-    class LakeflowConnect:
+    class LakeflowConnect:  # pylint: disable=too-many-instance-attributes
         """
         Google Maps API connector for Lakeflow.
 
@@ -755,9 +755,8 @@ def register_lakeflow_source(spark):
                     data = response.json()
                     places = data.get("places", [])
 
-                    # Yield each place
-                    for place in places:
-                        yield place
+                    # Yield all places from this page
+                    yield from places
 
                     # Check for next page
                     next_page_token = data.get("nextPageToken")
@@ -815,7 +814,7 @@ def register_lakeflow_source(spark):
                     f"Could not geocode address '{address}': No results found. "
                     "Please provide a more specific address or use latitude/longitude directly."
                 )
-            elif status != "OK":
+            if status != "OK":
                 raise Exception(
                     f"Google Geocoding API error for '{address}': status={status}, "
                     f"error_message={data.get('error_message', 'Unknown error')}"
@@ -935,9 +934,8 @@ def register_lakeflow_source(spark):
                     data = response.json()
                     places = data.get("places", [])
 
-                    # Yield each place
-                    for place in places:
-                        yield place
+                    # Yield all places from this page
+                    yield from places
 
                     # Check for next page
                     next_page_token = data.get("nextPageToken")
@@ -1034,8 +1032,7 @@ def register_lakeflow_source(spark):
 
                 results = data.get("results", [])
 
-                for result in results:
-                    yield result
+                yield from results
 
             return geocoder_iterator(), {}
 
@@ -1143,12 +1140,23 @@ def register_lakeflow_source(spark):
                 for origin_index, row in enumerate(rows):
                     elements = row.get("elements", [])
                     for destination_index, element in enumerate(elements):
+                        # Get addresses safely
+                        origin_addr = (
+                            origin_addresses[origin_index]
+                            if origin_index < len(origin_addresses)
+                            else None
+                        )
+                        dest_addr = (
+                            destination_addresses[destination_index]
+                            if destination_index < len(destination_addresses)
+                            else None
+                        )
                         # Build flattened record
                         record = {
                             "origin_index": origin_index,
                             "destination_index": destination_index,
-                            "origin_address": origin_addresses[origin_index] if origin_index < len(origin_addresses) else None,
-                            "destination_address": destination_addresses[destination_index] if destination_index < len(destination_addresses) else None,
+                            "origin_address": origin_addr,
+                            "destination_address": dest_addr,
                             "status": element.get("status"),
                             "distance": element.get("distance"),
                             "duration": element.get("duration"),
