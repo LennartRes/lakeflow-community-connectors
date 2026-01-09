@@ -1,5 +1,6 @@
-import requests
 from typing import Dict, List, Tuple, Iterator, Any
+
+import requests
 from pyspark.sql.types import (
     StructType,
     StructField,
@@ -11,10 +12,10 @@ from pyspark.sql.types import (
 )
 
 
-class LakeflowConnect:
+class LakeflowConnect:  # pylint: disable=too-many-instance-attributes
     """
     Google Maps API connector for Lakeflow.
-    
+
     This connector supports:
     - Places API (New) Text Search for place data
     - Geocoding API for address-to-coordinates and reverse geocoding
@@ -553,9 +554,8 @@ class LakeflowConnect:
                 data = response.json()
                 places = data.get("places", [])
 
-                # Yield each place
-                for place in places:
-                    yield place
+                # Yield all places from this page
+                yield from places
 
                 # Check for next page
                 next_page_token = data.get("nextPageToken")
@@ -613,7 +613,7 @@ class LakeflowConnect:
                 f"Could not geocode address '{address}': No results found. "
                 "Please provide a more specific address or use latitude/longitude directly."
             )
-        elif status != "OK":
+        if status != "OK":
             raise Exception(
                 f"Google Geocoding API error for '{address}': status={status}, "
                 f"error_message={data.get('error_message', 'Unknown error')}"
@@ -733,9 +733,8 @@ class LakeflowConnect:
                 data = response.json()
                 places = data.get("places", [])
 
-                # Yield each place
-                for place in places:
-                    yield place
+                # Yield all places from this page
+                yield from places
 
                 # Check for next page
                 next_page_token = data.get("nextPageToken")
@@ -832,8 +831,7 @@ class LakeflowConnect:
 
             results = data.get("results", [])
 
-            for result in results:
-                yield result
+            yield from results
 
         return geocoder_iterator(), {}
 
@@ -941,12 +939,23 @@ class LakeflowConnect:
             for origin_index, row in enumerate(rows):
                 elements = row.get("elements", [])
                 for destination_index, element in enumerate(elements):
+                    # Get addresses safely
+                    origin_addr = (
+                        origin_addresses[origin_index]
+                        if origin_index < len(origin_addresses)
+                        else None
+                    )
+                    dest_addr = (
+                        destination_addresses[destination_index]
+                        if destination_index < len(destination_addresses)
+                        else None
+                    )
                     # Build flattened record
                     record = {
                         "origin_index": origin_index,
                         "destination_index": destination_index,
-                        "origin_address": origin_addresses[origin_index] if origin_index < len(origin_addresses) else None,
-                        "destination_address": destination_addresses[destination_index] if destination_index < len(destination_addresses) else None,
+                        "origin_address": origin_addr,
+                        "destination_address": dest_addr,
                         "status": element.get("status"),
                         "distance": element.get("distance"),
                         "duration": element.get("duration"),
