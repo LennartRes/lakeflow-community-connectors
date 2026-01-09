@@ -270,23 +270,6 @@ distance_matrix_example = {
 combined_pipeline_spec = {
     "connection_name": CONNECTION_NAME,
     "objects": [
-        # Places (Text Search): Search for gas stations by text query
-        {
-            "table": {
-                "source_table": "places",
-                "destination_catalog": DESTINATION_CATALOG,
-                "destination_schema": DESTINATION_SCHEMA,
-                "destination_table": "gas_stations_berlin",
-                "table_configuration": {
-                    "text_query": "Gas stations in Berlin",
-                    "included_type": "gas_station",
-                    "max_result_count": "20",
-                    "region_code": "DE",
-                    "scd_type": "SCD_TYPE_1",
-                    "primary_keys": ["id"],
-                },
-            }
-        },
         # Places (Nearby Search): Search for cafes near office
         {
             "table": {
