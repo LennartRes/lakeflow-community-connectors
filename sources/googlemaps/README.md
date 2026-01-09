@@ -20,8 +20,7 @@ To configure the connector, provide the following parameter in your connector op
 | Name | Type | Required | Description | Example |
 |------|------|----------|-------------|---------|
 | `api_key` | string | Yes | Google Maps Platform API key | `AIzaSyD...` |
-
-> **Note**: The `externalOptionsAllowList` is automatically configured via the connector specification (`connector_spec.yaml`). You do not need to set it manually.
+| `externalOptionsAllowList` | string | Yes | Allow-List for table_configurations | `tableConfigs,text_query,language_code,max_result_count,included_type,min_rating,open_now,region_code,latitude,longitude,radius,location_address,included_types,excluded_types,rank_preference,address,latlng,place_id,language,region,bounds,components,result_type,location_type,origins,destinations,mode,avoid,units,departure_time,arrival_time,traffic_model,transit_mode,transit_routing_preference` |
 
 ### Obtaining Your API Key
 
