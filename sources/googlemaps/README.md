@@ -308,43 +308,8 @@ Follow the Lakeflow Community Connector UI, which will guide you through setting
       },
       {
         "table": {
-          "source_table": "places",
-          "text_query": "restaurants in San Francisco",
-          "included_type": "restaurant"
-        }
-      },
-      {
-        "table": {
-          "source_table": "places",
-          "latitude": "52.5200",
-          "longitude": "13.4050",
-          "radius": "1500",
-          "included_types": "gas_station",
-          "rank_preference": "DISTANCE",
-          "language_code": "de"
-        }
-      },
-      {
-        "table": {
-          "source_table": "places",
-          "location_address": "Eiffel Tower, Paris, France",
-          "radius": "500",
-          "included_types": "restaurant,cafe",
-          "excluded_types": "bar",
-          "max_result_count": "20"
-        }
-      },
-      {
-        "table": {
           "source_table": "geocoder",
           "address": "1600 Amphitheatre Parkway, Mountain View, CA",
-          "language": "en"
-        }
-      },
-      {
-        "table": {
-          "source_table": "geocoder",
-          "latlng": "47.6062,-122.3321",
           "language": "en"
         }
       },
@@ -355,15 +320,6 @@ Follow the Lakeflow Community Connector UI, which will guide you through setting
           "destinations": "San Francisco, CA|Los Angeles, CA",
           "mode": "driving",
           "units": "metric"
-        }
-      },
-      {
-        "table": {
-          "source_table": "distance_matrix",
-          "origins": "New York, NY",
-          "destinations": "Boston, MA|Philadelphia, PA|Washington, DC",
-          "mode": "transit",
-          "departure_time": "now"
         }
       }
     ]
