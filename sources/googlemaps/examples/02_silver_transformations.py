@@ -33,9 +33,10 @@ TARGET_CATALOG = "googlemaps"
 TARGET_SCHEMA = "googlemaps_silver"
 
 # Source table names (from your ingestion pipeline)
-PLACES_TABLE = "gas_stations_berlin"
-GEOCODER_TABLE = "office_coordinates"
-DISTANCE_MATRIX_TABLE = "distances_to_gas_stations"
+# Update these to match the destination_table names from 01_get_started.py
+PLACES_TABLE = "restaurants_berlin"  # Default from places_example
+GEOCODER_TABLE = "office_coordinates"  # From combined_pipeline_spec
+DISTANCE_MATRIX_TABLE = "distances_to_gas_stations"  # From combined_pipeline_spec
 
 # COMMAND ----------
 
@@ -69,10 +70,10 @@ def safe_write_table(df, target_catalog: str, target_schema: str, table_name: st
     """Safely write a DataFrame to a table with error handling."""
     try:
         df.write.mode("overwrite").saveAsTable(f"{target_catalog}.{target_schema}.{table_name}")
-        print(f"✅ Created: {target_catalog}.{target_schema}.{table_name}")
+        print(f"Created: {target_catalog}.{target_schema}.{table_name}")
         return True
     except Exception as e:
-        print(f"⚠️ Warning: Could not create {table_name}: {str(e)}")
+        print(f"Warning: Could not create {table_name}: {str(e)}")
         return False
 
 # COMMAND ----------
@@ -95,7 +96,7 @@ places_table_ready = table_has_data(SOURCE_CATALOG, SOURCE_SCHEMA, PLACES_TABLE)
 places_raw = None
 
 if not places_table_ready:
-    print(f"⚠️ Skipping places tables: {PLACES_TABLE} not found or empty")
+    print(f"Skipping places tables: {PLACES_TABLE} not found or empty")
 else:
     # Read places raw data
     places_raw = spark.table(f"{SOURCE_CATALOG}.{SOURCE_SCHEMA}.{PLACES_TABLE}")
@@ -331,7 +332,7 @@ if geocoder_table_ready:
     
     safe_write_table(geocoder_flattened, TARGET_CATALOG, TARGET_SCHEMA, "geocoder_flattened")
 else:
-    print(f"⚠️ Skipping geocoder tables: {GEOCODER_TABLE} not found or empty")
+    print(f"Skipping geocoder tables: {GEOCODER_TABLE} not found or empty")
 
 # COMMAND ----------
 
@@ -426,7 +427,7 @@ if geocoder_table_ready:
         safe_write_table(geocoder_address_parsed, TARGET_CATALOG, TARGET_SCHEMA, "geocoder_address_parsed")
         
     except Exception as e:
-        print(f"⚠️ Warning: Could not create geocoder_address_parsed: {str(e)}")
+        print(f"Warning: Could not create geocoder_address_parsed: {str(e)}")
         # Try a simpler version without pivoting
         try:
             geocoder_address_simple = geocoder_raw.select(
@@ -437,7 +438,7 @@ if geocoder_table_ready:
             )
             safe_write_table(geocoder_address_simple, TARGET_CATALOG, TARGET_SCHEMA, "geocoder_address_parsed")
         except Exception as e2:
-            print(f"⚠️ Warning: Fallback also failed: {str(e2)}")
+            print(f"Warning: Fallback also failed: {str(e2)}")
 
 # COMMAND ----------
 
@@ -457,7 +458,7 @@ if geocoder_table_ready:
 distance_matrix_table_ready = table_has_data(SOURCE_CATALOG, SOURCE_SCHEMA, DISTANCE_MATRIX_TABLE)
 
 if not distance_matrix_table_ready:
-    print(f"⚠️ Skipping distance matrix tables: {DISTANCE_MATRIX_TABLE} not found or empty")
+    print(f"Skipping distance matrix tables: {DISTANCE_MATRIX_TABLE} not found or empty")
 else:
     # Read distance matrix raw data
     distance_matrix_raw = spark.table(f"{SOURCE_CATALOG}.{SOURCE_SCHEMA}.{DISTANCE_MATRIX_TABLE}")
@@ -533,13 +534,13 @@ try:
             table_name = table["tableName"]
             try:
                 count = spark.table(f"{TARGET_CATALOG}.{TARGET_SCHEMA}.{table_name}").count()
-                print(f"📊 {table_name}: {count:,} rows")
+                print(f"[OK] {table_name}: {count:,} rows")
             except Exception as e:
-                print(f"⚠️ {table_name}: Could not read ({str(e)[:50]}...)")
+                print(f"[WARN] {table_name}: Could not read ({str(e)[:50]}...)")
     else:
         print("No tables created in silver layer.")
 except Exception as e:
-    print(f"⚠️ Could not list tables: {str(e)}")
+    print(f"[WARN] Could not list tables: {str(e)}")
 
 print("=" * 60)
 
