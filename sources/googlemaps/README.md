@@ -395,6 +395,177 @@ Since all tables use snapshot ingestion:
 - Consider staggering syncs across different queries to spread API costs
 - For `distance_matrix` with traffic data, schedule during relevant time windows
 
+## Multi-Instance Ingestion Support
+
+The Google Maps connector supports **multiple ingestions from the same source table** within
+a single pipeline. For example, you can query the `places` table multiple times with different
+parameters (different cities, different place types) and each will create a separate destination table.
+
+This is enabled by the index-based pipeline architecture that uses the **destination table name**
+(not source table name) for unique view naming, avoiding conflicts when the same API endpoint
+is queried multiple times.
+
+---
+
+## Matrix-Based Table Generation (Advanced)
+
+For scenarios where you need to ingest the same data type across multiple locations,
+the **table matrix** feature allows you to generate multiple destination tables from
+a single connector table using parameter matrices.
+
+### The Problem
+
+Without matrix expansion, ingesting restaurants for 10 cities requires 10 separate table
+configurations—each nearly identical except for the location:
+
+```python
+# ❌ Repetitive: 10 table configurations that are 90% identical
+pipeline_spec = {
+    "objects": [
+        {"table": {"source_table": "places", "table_configuration": {"location_address": "Berlin, Germany", "radius": "5000", "included_types": "restaurant", ...}}},
+        {"table": {"source_table": "places", "table_configuration": {"location_address": "Munich, Germany", "radius": "5000", "included_types": "restaurant", ...}}},
+        {"table": {"source_table": "places", "table_configuration": {"location_address": "Hamburg, Germany", "radius": "5000", "included_types": "restaurant", ...}}},
+        # ... 7 more nearly identical entries
+    ]
+}
+```
+
+### The Solution
+
+Use the `libs/table_matrix` module to define a single matrix that expands automatically:
+
+```python
+from libs.table_matrix import expand_pipeline_spec, generate_city_parameters
+
+# ✅ Concise: 1 matrix definition generates 10 tables
+pipeline_spec = expand_pipeline_spec({
+    "connection_name": "googlemaps",
+    "objects": [
+        {
+            "matrix": {
+                "source_table": "places",
+                "parameters": generate_city_parameters([
+                    "Berlin, Germany",
+                    "Munich, Germany",
+                    "Hamburg, Germany",
+                    "Frankfurt, Germany",
+                    "Cologne, Germany",
+                    # ... add as many cities as needed
+                ], radius="5000"),
+                "common_config": {
+                    "included_types": "restaurant",
+                    "language_code": "en",
+                    "scd_type": "SCD_TYPE_1",
+                },
+                "destination": {
+                    "catalog": "googlemaps",
+                    "schema": "places",
+                    "table_template": "restaurants_{location_address_slug}",
+                }
+            }
+        }
+    ]
+})
+```
+
+### Matrix Specification Reference
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `source_table` | Yes | The connector table name (e.g., `"places"`, `"geocoder"`) |
+| `parameters` | Yes | List of parameter dictionaries—each generates one table |
+| `common_config` | No | Configuration applied to ALL generated tables |
+| `destination` | No | Destination template for catalog, schema, and table name |
+
+### Destination Template Variables
+
+In `table_template`, use these placeholders:
+
+| Placeholder | Description | Example Input | Output |
+|-------------|-------------|---------------|--------|
+| `{param_name}` | Raw parameter value | `location_address="Berlin"` | `Berlin` |
+| `{param_name_slug}` | Slugified value (lowercase, underscores) | `location_address="Berlin, Germany"` | `berlin_germany` |
+
+**Example:**
+```python
+"table_template": "restaurants_{location_address_slug}"
+# With location_address="Munich, Germany" → "restaurants_munich_germany"
+```
+
+### Mixing Regular Tables and Matrices
+
+You can combine regular `table` objects with `matrix` objects in the same spec:
+
+```python
+pipeline_spec = expand_pipeline_spec({
+    "connection_name": "googlemaps",
+    "objects": [
+        # Regular table: Single geocoder query
+        {
+            "table": {
+                "source_table": "geocoder",
+                "destination_table": "office_location",
+                "table_configuration": {"address": "123 Main St"}
+            }
+        },
+        # Matrix: Multiple restaurant tables
+        {
+            "matrix": {
+                "source_table": "places",
+                "parameters": [...],
+                "common_config": {...},
+                "destination": {...}
+            }
+        },
+        # Another matrix: Gas stations
+        {
+            "matrix": {
+                "source_table": "places",
+                "parameters": [...],
+                "common_config": {"included_types": "gas_station"},
+                "destination": {...}
+            }
+        },
+    ]
+})
+```
+
+### Helper Functions
+
+The module provides convenience helpers for common patterns:
+
+```python
+from libs.table_matrix import (
+    generate_city_parameters,      # Google Maps: multiple cities
+    generate_repo_parameters,      # GitHub: multiple repositories
+    generate_date_range_parameters # Any: multiple time periods
+)
+
+# Example: Generate parameters for German cities
+params = generate_city_parameters(
+    cities=["Berlin", "Munich", "Hamburg"],
+    radius="5000",
+    extra_config={"language_code": "de"}
+)
+```
+
+### Reusability Across Connectors
+
+The table matrix feature is **connector-agnostic**. Any Lakeflow connector can use it:
+
+| Connector | Use Case | Parameter |
+|-----------|----------|-----------|
+| **Google Maps** | Multiple cities | `location_address` |
+| **GitHub** | Multiple repositories | `owner`, `repo` |
+| **Stripe** | Multiple time periods | `start_date` |
+| **HubSpot** | Multiple lists/segments | `list_id` |
+
+### Example Pipeline
+
+See the full example at: `sources/googlemaps/examples/example_matrix_ingest.py`
+
+---
+
 ## Troubleshooting
 
 **Common Issues:**

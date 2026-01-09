@@ -404,3 +404,223 @@ def test_get_full_destination_table_name_unknown_table_raises_error():
 
     with pytest.raises(ValueError, match="Table 'unknown_table' not found"):
         parser.get_full_destination_table_name("unknown_table")
+
+
+# =============================================================================
+# Tests for index-based methods (multi-instance support)
+# =============================================================================
+
+
+def _build_multi_instance_spec():
+    """Build a spec with multiple objects having the same source_table."""
+    return {
+        "connection_name": "googlemaps",
+        "objects": [
+            {
+                "table": {
+                    "source_table": "places",
+                    "destination_catalog": "cat",
+                    "destination_schema": "sch",
+                    "destination_table": "restaurants_berlin",
+                    "table_configuration": {
+                        "location_address": "Berlin, Germany",
+                        "radius": "3000",
+                        "scd_type": "SCD_TYPE_1",
+                        "primary_keys": '["id"]',
+                    },
+                }
+            },
+            {
+                "table": {
+                    "source_table": "places",
+                    "destination_catalog": "cat",
+                    "destination_schema": "sch",
+                    "destination_table": "restaurants_munich",
+                    "table_configuration": {
+                        "location_address": "Munich, Germany",
+                        "radius": "5000",
+                        "scd_type": "SCD_TYPE_2",
+                        "primary_keys": '["id", "ts"]',
+                        "sequence_by": "updated_at",
+                    },
+                }
+            },
+            {
+                "table": {
+                    "source_table": "geocoder",
+                    "destination_catalog": "cat",
+                    "destination_schema": "sch",
+                    "destination_table": "office",
+                    "table_configuration": {
+                        "address": "123 Main St",
+                    },
+                }
+            },
+        ],
+    }
+
+
+def test_get_object_count():
+    """Test that get_object_count returns the correct number of objects."""
+    parser = SpecParser(_build_multi_instance_spec())
+    assert parser.get_object_count() == 3
+
+
+def test_get_unique_source_tables():
+    """Test that get_unique_source_tables returns deduplicated list in order."""
+    parser = SpecParser(_build_multi_instance_spec())
+    unique = parser.get_unique_source_tables()
+    assert unique == ["places", "geocoder"]
+
+
+def test_get_source_table_by_index():
+    """Test that get_source_table_by_index returns correct source table per index."""
+    parser = SpecParser(_build_multi_instance_spec())
+    assert parser.get_source_table_by_index(0) == "places"
+    assert parser.get_source_table_by_index(1) == "places"
+    assert parser.get_source_table_by_index(2) == "geocoder"
+
+
+def test_get_source_table_by_index_raises_on_invalid_index():
+    """Test that get_source_table_by_index raises IndexError for out-of-range index."""
+    parser = SpecParser(_build_multi_instance_spec())
+    with pytest.raises(IndexError):
+        parser.get_source_table_by_index(100)
+
+
+def test_get_destination_table_by_index():
+    """Test that get_destination_table_by_index returns correct destination per index."""
+    parser = SpecParser(_build_multi_instance_spec())
+    assert parser.get_destination_table_by_index(0) == "restaurants_berlin"
+    assert parser.get_destination_table_by_index(1) == "restaurants_munich"
+    assert parser.get_destination_table_by_index(2) == "office"
+
+
+def test_get_destination_table_by_index_defaults_to_source():
+    """Test that destination defaults to source table when not specified."""
+    spec = {
+        "connection_name": "test",
+        "objects": [
+            {"table": {"source_table": "my_source"}},
+        ],
+    }
+    parser = SpecParser(spec)
+    assert parser.get_destination_table_by_index(0) == "my_source"
+
+
+def test_get_full_destination_table_name_by_index():
+    """Test that get_full_destination_table_name_by_index returns correct full path."""
+    parser = SpecParser(_build_multi_instance_spec())
+    assert parser.get_full_destination_table_name_by_index(0) == "`cat`.`sch`.`restaurants_berlin`"
+    assert parser.get_full_destination_table_name_by_index(1) == "`cat`.`sch`.`restaurants_munich`"
+    assert parser.get_full_destination_table_name_by_index(2) == "`cat`.`sch`.`office`"
+
+
+def test_get_table_configuration_by_index():
+    """Test that get_table_configuration_by_index returns correct config per index."""
+    parser = SpecParser(_build_multi_instance_spec())
+
+    config0 = parser.get_table_configuration_by_index(0)
+    config1 = parser.get_table_configuration_by_index(1)
+    config2 = parser.get_table_configuration_by_index(2)
+
+    # Each config should have its own location/address, excluding special keys
+    assert config0["location_address"] == "Berlin, Germany"
+    assert config0["radius"] == "3000"
+    assert "scd_type" not in config0
+    assert "primary_keys" not in config0
+
+    assert config1["location_address"] == "Munich, Germany"
+    assert config1["radius"] == "5000"
+
+    assert config2["address"] == "123 Main St"
+
+
+def test_get_scd_type_by_index():
+    """Test that get_scd_type_by_index returns correct SCD type per index."""
+    parser = SpecParser(_build_multi_instance_spec())
+    assert parser.get_scd_type_by_index(0) == "SCD_TYPE_1"
+    assert parser.get_scd_type_by_index(1) == "SCD_TYPE_2"
+    assert parser.get_scd_type_by_index(2) is None
+
+
+def test_get_scd_type_by_index_invalid_value_raises():
+    """Test that get_scd_type_by_index raises ValueError for invalid SCD type."""
+    spec = {
+        "connection_name": "test",
+        "objects": [
+            {
+                "table": {
+                    "source_table": "test",
+                    "table_configuration": {"scd_type": "INVALID"},
+                }
+            },
+        ],
+    }
+    parser = SpecParser(spec)
+    with pytest.raises(ValueError, match="Invalid SCD type"):
+        parser.get_scd_type_by_index(0)
+
+
+def test_get_primary_keys_by_index():
+    """Test that get_primary_keys_by_index returns correct keys per index."""
+    parser = SpecParser(_build_multi_instance_spec())
+    assert parser.get_primary_keys_by_index(0) == ["id"]
+    assert parser.get_primary_keys_by_index(1) == ["id", "ts"]
+    assert parser.get_primary_keys_by_index(2) is None
+
+
+def test_get_sequence_by_by_index():
+    """Test that get_sequence_by_by_index returns correct sequence_by per index."""
+    parser = SpecParser(_build_multi_instance_spec())
+    assert parser.get_sequence_by_by_index(0) is None
+    assert parser.get_sequence_by_by_index(1) == "updated_at"
+    assert parser.get_sequence_by_by_index(2) is None
+
+
+def test_index_based_methods_allow_duplicate_source_tables():
+    """Test that index-based methods correctly distinguish objects with same source_table."""
+    spec = {
+        "connection_name": "test",
+        "objects": [
+            {
+                "table": {
+                    "source_table": "places",
+                    "destination_table": "places_a",
+                    "table_configuration": {"query": "A"},
+                }
+            },
+            {
+                "table": {
+                    "source_table": "places",
+                    "destination_table": "places_b",
+                    "table_configuration": {"query": "B"},
+                }
+            },
+            {
+                "table": {
+                    "source_table": "places",
+                    "destination_table": "places_c",
+                    "table_configuration": {"query": "C"},
+                }
+            },
+        ],
+    }
+    parser = SpecParser(spec)
+
+    # All source tables are "places"
+    assert parser.get_source_table_by_index(0) == "places"
+    assert parser.get_source_table_by_index(1) == "places"
+    assert parser.get_source_table_by_index(2) == "places"
+
+    # But destinations and configs are unique per index
+    assert parser.get_destination_table_by_index(0) == "places_a"
+    assert parser.get_destination_table_by_index(1) == "places_b"
+    assert parser.get_destination_table_by_index(2) == "places_c"
+
+    assert parser.get_table_configuration_by_index(0)["query"] == "A"
+    assert parser.get_table_configuration_by_index(1)["query"] == "B"
+    assert parser.get_table_configuration_by_index(2)["query"] == "C"
+
+    # Unique source tables should only have "places" once
+    assert parser.get_unique_source_tables() == ["places"]

@@ -1,14 +1,15 @@
 # Databricks notebook source
+# pylint: disable=invalid-name,wrong-import-position
 # MAGIC %md
 # MAGIC # 🗺️ Google Maps Connector - Get Started
-# MAGIC 
+# MAGIC
 # MAGIC This notebook demonstrates how to ingest data from Google Maps APIs into your Lakehouse.
-# MAGIC 
+# MAGIC
 # MAGIC **Supported Tables:**
 # MAGIC - `places` - Location data from Google's database of 200M+ places
 # MAGIC - `geocoder` - Address-to-coordinates and reverse geocoding
 # MAGIC - `distance_matrix` - Travel distance and time calculations
-# MAGIC 
+# MAGIC
 # MAGIC ## Prerequisites
 # MAGIC 1. Google Cloud Project with billing enabled
 # MAGIC 2. APIs enabled: Places API (New), Geocoding API, Distance Matrix API
@@ -38,7 +39,7 @@ DESTINATION_SCHEMA = "googlemaps_raw"
 
 # MAGIC %md
 # MAGIC ## Step 2: Define Your Ingestion Pipeline
-# MAGIC 
+# MAGIC
 # MAGIC Choose from the examples below and customize for your use case.
 
 # COMMAND ----------
@@ -62,7 +63,7 @@ places_example = {
                 "table_configuration": {
                     # REQUIRED: Natural language search query
                     "text_query": "Italian restaurants in Berlin",
-                    
+
                     # OPTIONAL: Customize your search
                     "language_code": "en",          # Language for results
                     "max_result_count": "20",       # Results per page (1-20)
@@ -70,7 +71,7 @@ places_example = {
                     "min_rating": "4.0",            # Minimum rating filter
                     "open_now": "true",             # Only open places
                     "region_code": "DE",            # Region bias
-                    
+
                     # SCD Type: SCD_TYPE_1 (upsert), SCD_TYPE_2 (history), APPEND_ONLY
                     "scd_type": "SCD_TYPE_1",
                     "primary_keys": ["id"],
@@ -103,16 +104,16 @@ places_nearby_example = {
                     "latitude": "52.5065",             # Center latitude (Berlin office)
                     "longitude": "13.4264",            # Center longitude
                     "radius": "2000",                  # Search radius in meters (max 50000)
-                    
+
                     # OPTIONAL: Filter by place types
                     "included_types": "gas_station",   # Comma-separated types to include
                     # "excluded_types": "car_wash",    # Comma-separated types to exclude
-                    
+
                     # OPTIONAL: Search preferences
                     "rank_preference": "DISTANCE",     # DISTANCE or POPULARITY
                     "language_code": "de",             # Language for results
                     "max_result_count": "20",          # Results per page (1-20)
-                    
+
                     "scd_type": "SCD_TYPE_1",
                     "primary_keys": ["id"],
                 },
@@ -143,15 +144,15 @@ places_nearby_address_example = {
                     # Use location_address instead of lat/lng - automatically geocoded!
                     "location_address": "Brandenburg Gate, Berlin, Germany",
                     "radius": "500",                   # Search radius in meters
-                    
+
                     # OPTIONAL: Filter by place types
                     "included_types": "cafe,coffee_shop",
-                    
+
                     # OPTIONAL: Search preferences
                     "rank_preference": "DISTANCE",
                     "language_code": "en",
                     "max_result_count": "20",
-                    
+
                     "scd_type": "SCD_TYPE_1",
                     "primary_keys": ["id"],
                 },
@@ -181,11 +182,11 @@ geocoder_forward_example = {
                 "table_configuration": {
                     # Forward geocoding: address to coordinates
                     "address": "Köpenicker Str. 41, 10179 Berlin",
-                    
+
                     # OPTIONAL parameters
                     "language": "en",
                     "region": "de",  # Region bias (ISO 3166-1 country code)
-                    
+
                     "scd_type": "APPEND_ONLY",
                 },
             }
@@ -236,21 +237,21 @@ distance_matrix_example = {
                     # REQUIRED: Origins and destinations (pipe-separated for multiple)
                     "origins": "Berlin, Germany|Munich, Germany",
                     "destinations": "Frankfurt, Germany|Hamburg, Germany",
-                    
+
                     # OPTIONAL: Travel mode (driving, walking, bicycling, transit)
                     "mode": "driving",
-                    
+
                     # OPTIONAL: Traffic information
                     "departure_time": "now",  # or Unix timestamp
                     "traffic_model": "best_guess",  # best_guess, pessimistic, optimistic
-                    
+
                     # OPTIONAL: Units and language
                     "units": "metric",  # metric or imperial
                     "language": "en",
-                    
+
                     # OPTIONAL: Avoid certain route features
                     # "avoid": "tolls|highways",  # tolls, highways, ferries, indoor
-                    
+
                     "scd_type": "APPEND_ONLY",
                 },
             }
@@ -270,23 +271,6 @@ distance_matrix_example = {
 combined_pipeline_spec = {
     "connection_name": CONNECTION_NAME,
     "objects": [
-        # Places (Text Search): Search for gas stations by text query
-        {
-            "table": {
-                "source_table": "places",
-                "destination_catalog": DESTINATION_CATALOG,
-                "destination_schema": DESTINATION_SCHEMA,
-                "destination_table": "gas_stations_berlin",
-                "table_configuration": {
-                    "text_query": "Gas stations in Berlin",
-                    "included_type": "gas_station",
-                    "max_result_count": "20",
-                    "region_code": "DE",
-                    "scd_type": "SCD_TYPE_1",
-                    "primary_keys": ["id"],
-                },
-            }
-        },
         # Places (Nearby Search): Search for cafes near office
         {
             "table": {
@@ -343,7 +327,7 @@ combined_pipeline_spec = {
 
 # MAGIC %md
 # MAGIC ## Step 3: Run the Ingestion Pipeline
-# MAGIC 
+# MAGIC
 # MAGIC Select which pipeline spec to run by uncommenting the appropriate line.
 
 # COMMAND ----------
@@ -352,8 +336,8 @@ from pipeline.ingestion_pipeline import ingest
 from libs.source_loader import get_register_function
 
 # Register the Google Maps source
-source_name = "googlemaps"
-register_lakeflow_source = get_register_function(source_name)
+SOURCE_NAME = "googlemaps"
+register_lakeflow_source = get_register_function(SOURCE_NAME)
 register_lakeflow_source(spark)
 
 # COMMAND ----------
@@ -374,7 +358,7 @@ ingest(spark, pipeline_spec)
 
 # MAGIC %md
 # MAGIC ## Step 4: Query Your Data
-# MAGIC 
+# MAGIC
 # MAGIC After running the pipeline, query your ingested data:
 
 # COMMAND ----------
@@ -382,10 +366,10 @@ ingest(spark, pipeline_spec)
 # MAGIC %sql
 # MAGIC -- View places data (uncomment to query)
 # MAGIC -- SELECT * FROM googlemaps.googlemaps_raw.gas_stations_berlin LIMIT 10;
-# MAGIC 
+# MAGIC
 # MAGIC -- View geocoder data
 # MAGIC -- SELECT * FROM googlemaps.googlemaps_raw.office_coordinates LIMIT 10;
-# MAGIC 
+# MAGIC
 # MAGIC -- View distance matrix data
 # MAGIC -- SELECT * FROM googlemaps.googlemaps_raw.distances_to_gas_stations LIMIT 10;
 
@@ -393,7 +377,7 @@ ingest(spark, pipeline_spec)
 
 # MAGIC %md
 # MAGIC ## 📚 Reference
-# MAGIC 
+# MAGIC
 # MAGIC ### Places Table Options - Text Search Mode
 # MAGIC Use `text_query` to search by natural language:
 # MAGIC | Option | Required | Description |
@@ -405,7 +389,7 @@ ingest(spark, pipeline_spec)
 # MAGIC | `min_rating` | No | Minimum rating filter (1.0-5.0) |
 # MAGIC | `open_now` | No | Only return open places ("true"/"false") |
 # MAGIC | `region_code` | No | Region code for biasing (e.g., "US") |
-# MAGIC 
+# MAGIC
 # MAGIC ### Places Table Options - Nearby Search Mode
 # MAGIC Use `location_address` OR (`latitude` + `longitude`), plus `radius`:
 # MAGIC | Option | Required | Description |
@@ -419,9 +403,9 @@ ingest(spark, pipeline_spec)
 # MAGIC | `language_code` | No | Language for results (e.g., "en") |
 # MAGIC | `max_result_count` | No | Results per page (1-20, default 20) |
 # MAGIC | `rank_preference` | No | Ranking: "DISTANCE" or "POPULARITY" |
-# MAGIC 
+# MAGIC
 # MAGIC *Requires `radius` + ONE of: `location_address` OR (`latitude` + `longitude`)
-# MAGIC 
+# MAGIC
 # MAGIC ### Geocoder Table Options
 # MAGIC | Option | Required | Description |
 # MAGIC |--------|----------|-------------|
@@ -430,9 +414,9 @@ ingest(spark, pipeline_spec)
 # MAGIC | `place_id` | Yes* | Place ID to geocode |
 # MAGIC | `language` | No | Language for results |
 # MAGIC | `region` | No | Region bias |
-# MAGIC 
+# MAGIC
 # MAGIC *One of address, latlng, or place_id is required
-# MAGIC 
+# MAGIC
 # MAGIC ### Distance Matrix Table Options
 # MAGIC | Option | Required | Description |
 # MAGIC |--------|----------|-------------|
@@ -444,7 +428,7 @@ ingest(spark, pipeline_spec)
 # MAGIC | `traffic_model` | No | best_guess, pessimistic, optimistic |
 # MAGIC | `units` | No | metric or imperial |
 # MAGIC | `avoid` | No | Features to avoid: tolls\|highways\|ferries\|indoor |
-# MAGIC 
+# MAGIC
 # MAGIC ### SCD Types
 # MAGIC | Type | Description |
 # MAGIC |------|-------------|

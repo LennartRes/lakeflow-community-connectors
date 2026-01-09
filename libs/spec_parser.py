@@ -315,3 +315,163 @@ class SpecParser:
                 return f"`{catalog}`.`{schema}`.`{table}`"
 
         raise ValueError(f"Table '{table_name}' not found in the pipeline spec")
+
+    # =========================================================================
+    # Index-based methods for multi-instance support
+    # =========================================================================
+    # These methods allow multiple objects with the same source_table but
+    # different configurations (e.g., places for Berlin vs places for Munich).
+
+    def get_object_count(self) -> int:
+        """Return the number of objects in the specification."""
+        return len(self._model.objects)
+
+    def get_source_table_by_index(self, index: int) -> str:
+        """
+        Return the source table name for the object at the given index.
+
+        Args:
+            index: The index of the object (0-based).
+
+        Returns:
+            The source table name as a string.
+
+        Raises:
+            IndexError: If the index is out of range.
+        """
+        return self._model.objects[index].table.source_table
+
+    def get_destination_table_by_index(self, index: int) -> str:
+        """
+        Return the destination table name for the object at the given index.
+
+        If destination_table is not specified, returns the source_table name.
+
+        Args:
+            index: The index of the object (0-based).
+
+        Returns:
+            The destination table name as a string.
+        """
+        obj = self._model.objects[index]
+        return obj.table.destination_table or obj.table.source_table
+
+    def get_full_destination_table_name_by_index(self, index: int) -> str:
+        """
+        Return the full destination table name for the object at the given index.
+
+        Args:
+            index: The index of the object (0-based).
+
+        Returns:
+            The full destination table name in the format
+            'destination_catalog.destination_schema.destination_table'.
+        """
+        obj = self._model.objects[index]
+        catalog = obj.table.destination_catalog
+        schema = obj.table.destination_schema
+        table = obj.table.destination_table or obj.table.source_table
+
+        if catalog is None or schema is None:
+            return table
+        return f"`{catalog}`.`{schema}`.`{table}`"
+
+    def get_table_configuration_by_index(self, index: int) -> Dict[str, Any]:
+        """
+        Return the configuration for the object at the given index.
+
+        Excludes special keys: scd_type, primary_keys, sequence_by.
+
+        Args:
+            index: The index of the object (0-based).
+
+        Returns:
+            A dictionary containing the table configuration without special keys.
+        """
+        special_keys = {SCD_TYPE, PRIMARY_KEYS, SEQUENCE_BY}
+        obj = self._model.objects[index]
+        config = obj.table.table_configuration or {}
+        return {k: v for k, v in config.items() if k not in special_keys}
+
+    def get_scd_type_by_index(self, index: int) -> Optional[str]:
+        """
+        Return the SCD type for the object at the given index.
+
+        Args:
+            index: The index of the object (0-based).
+
+        Returns:
+            The SCD type as a string (normalized to uppercase), or None if not specified.
+
+        Raises:
+            ValueError: If the SCD type is not one of the valid values.
+        """
+        obj = self._model.objects[index]
+        config = obj.table.table_configuration or {}
+        scd_type_value = config.get(SCD_TYPE)
+        if scd_type_value is None:
+            return None
+
+        normalized = scd_type_value.upper()
+        if normalized not in VALID_SCD_TYPES:
+            raise ValueError(
+                f"Invalid SCD type '{scd_type_value}' for object at index {index}. "
+                f"Must be one of: {', '.join(sorted(VALID_SCD_TYPES))}"
+            )
+        return normalized
+
+    def get_primary_keys_by_index(self, index: int) -> Optional[List[str]]:
+        """
+        Return the primary keys for the object at the given index.
+
+        Args:
+            index: The index of the object (0-based).
+
+        Returns:
+            A list of primary key column names, or None if not specified.
+        """
+        obj = self._model.objects[index]
+        config = obj.table.table_configuration or {}
+        primary_keys_value = config.get(PRIMARY_KEYS)
+        if primary_keys_value is None:
+            return None
+        # If it's a JSON string (list was serialized), parse it
+        if isinstance(primary_keys_value, str) and primary_keys_value.startswith("["):
+            return json.loads(primary_keys_value)
+        # If it's a single string, return as a single-item list
+        return (
+            [primary_keys_value]
+            if isinstance(primary_keys_value, str)
+            else primary_keys_value
+        )
+
+    def get_sequence_by_by_index(self, index: int) -> Optional[str]:
+        """
+        Return the sequence_by column for the object at the given index.
+
+        Args:
+            index: The index of the object (0-based).
+
+        Returns:
+            The sequence_by column name as a string, or None if not specified.
+        """
+        obj = self._model.objects[index]
+        config = obj.table.table_configuration or {}
+        return config.get(SEQUENCE_BY)
+
+    def get_unique_source_tables(self) -> List[str]:
+        """
+        Return a deduplicated list of source table names.
+
+        Useful for fetching metadata once per source table type.
+
+        Returns:
+            A list of unique source table names.
+        """
+        seen = set()
+        result = []
+        for obj in self._model.objects:
+            if obj.table.source_table not in seen:
+                seen.add(obj.table.source_table)
+                result.append(obj.table.source_table)
+        return result
