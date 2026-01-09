@@ -395,23 +395,15 @@ Since all tables use snapshot ingestion:
 - Consider staggering syncs across different queries to spread API costs
 - For `distance_matrix` with traffic data, schedule during relevant time windows
 
-## Multi-Instance Ingestion Support
-
-The Google Maps connector supports **multiple ingestions from the same source table** within
-a single pipeline. For example, you can query the `places` table multiple times with different
-parameters (different cities, different place types) and each will create a separate destination table.
-
-This is enabled by the index-based pipeline architecture that uses the **destination table name**
-(not source table name) for unique view naming, avoiding conflicts when the same API endpoint
-is queried multiple times.
-
 ---
 
-## Matrix-Based Table Generation (Advanced)
+## Multi-Instance Ingestion Support with Matrix-Based Table Generation (Advanced)
 
-For scenarios where you need to ingest the same data type across multiple locations,
-the **table matrix** feature allows you to generate multiple destination tables from
-a single connector table using parameter matrices.
+The Google Maps connector supports **multiple ingestions from the same source table**
+within a single pipeline. This is especially helpful for scenarios where you need
+to ingest the same data type across multiple locations. You can achieve it by
+leveraging the **table matrix** feature for generating multiple destination tables
+from a single connector table using parameter matrices.
 
 ### The Problem
 
