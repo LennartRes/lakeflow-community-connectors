@@ -18,7 +18,7 @@ from pipeline.ingestion_pipeline import ingest
 from libs.source_loader import get_register_function
 from libs.table_matrix import expand_pipeline_spec, generate_city_parameters
 
-source_name = "googlemaps"
+SOURCE_NAME = "googlemaps"
 
 # =============================================================================
 # CONFIGURATION
@@ -199,9 +199,8 @@ for i, obj in enumerate(pipeline_spec["objects"], 1):
 print("=" * 70)
 
 # Dynamically import and register the LakeFlow source
-register_lakeflow_source = get_register_function(source_name)
+register_lakeflow_source = get_register_function(SOURCE_NAME)
 register_lakeflow_source(spark)
 
 # Ingest the tables specified in the pipeline spec
 ingest(spark, pipeline_spec)
-

@@ -1,16 +1,17 @@
 # Databricks notebook source
+# pylint: disable=invalid-name,wrong-import-position
 # MAGIC %md
 # MAGIC # 🥇 Google Maps - Gold Layer Transformations
-# MAGIC 
-# MAGIC This notebook creates analytics-ready gold tables by joining places, geocoder, 
+# MAGIC
+# MAGIC This notebook creates analytics-ready gold tables by joining places, geocoder,
 # MAGIC and distance matrix data with calculated columns and real value outputs.
-# MAGIC 
+# MAGIC
 # MAGIC ## Use Cases
 # MAGIC - **Location Intelligence**: Combine place ratings, locations, and distances
 # MAGIC - **Site Analysis**: Find optimal locations based on multiple criteria
 # MAGIC - **Travel Planning**: Calculate routes with traffic and cost analysis
 # MAGIC - **Competitive Analysis**: Analyze business density and ratings by area
-# MAGIC 
+# MAGIC
 # MAGIC ## Prerequisites
 # MAGIC 1. Run `01_get_started.py` to ingest raw data
 # MAGIC 2. Run `02_silver_transformations.py` to create silver layer tables
@@ -87,7 +88,7 @@ def table_has_data(catalog: str, schema: str, table: str) -> bool:
 
 # MAGIC %md
 # MAGIC ## 1. Location Intelligence Table
-# MAGIC 
+# MAGIC
 # MAGIC Comprehensive location data combining places with geocoder enrichment
 
 # COMMAND ----------
@@ -100,7 +101,7 @@ def table_has_data(catalog: str, schema: str, table: str) -> bool:
 
 def haversine_distance(lat1, lon1, lat2, lon2):
     """
-    Calculate the great circle distance between two points 
+    Calculate the great circle distance between two points
     on the earth (specified in decimal degrees) using Spark SQL functions.
     Returns distance in kilometers.
     """
@@ -109,17 +110,17 @@ def haversine_distance(lat1, lon1, lat2, lon2):
     lat2_rad = radians(lat2)
     lon1_rad = radians(lon1)
     lon2_rad = radians(lon2)
-    
+
     # Haversine formula
     dlat = lat2_rad - lat1_rad
     dlon = lon2_rad - lon1_rad
-    
+
     a = pow(sin(dlat / 2), 2) + cos(lat1_rad) * cos(lat2_rad) * pow(sin(dlon / 2), 2)
     c = 2 * atan2(sqrt(a), sqrt(1 - a))
-    
+
     # Earth's radius in kilometers
     earth_radius_km = 6371.0
-    
+
     return c * earth_radius_km
 
 # COMMAND ----------
@@ -152,7 +153,7 @@ if places_table_ready:
             ), 2
         )
     ).withColumn(
-        "reference_location", 
+        "reference_location",
         lit(REFERENCE_LOCATION["name"])
     )
 
@@ -166,13 +167,15 @@ if places_table_ready:
         # Bayesian average rating (weighted towards mean)
         "weighted_rating",
         spark_round(
-            (col("rating") * col("userRatingCount") + 3.5 * 10) / 
+            (col("rating") * col("userRatingCount") + 3.5 * 10) /
             (col("userRatingCount") + 10),
             2
         )
     )
 
     # Add service level scoring
+    # pylint: disable=singleton-comparison
+    # Note: PySpark Column comparisons require == True, not 'is True'
     places_with_scores = places_with_scores.withColumn(
         "service_score",
         (
@@ -191,6 +194,7 @@ if places_table_ready:
             when(col("wheelchair_seating") == True, 1).otherwise(0)
         )
     )
+    # pylint: enable=singleton-comparison
 
     # Add ranking within dataset
     window_by_rating = Window.orderBy(col("weighted_rating").desc())
@@ -215,43 +219,43 @@ if places_table_ready:
         col("id").alias("place_id"),
         col("name"),
         col("formattedAddress").alias("address"),
-        
+
         # Location
         col("latitude"),
         col("longitude"),
         col("distance_from_reference_km"),
         col("reference_location"),
         col("distance_rank"),
-        
+
         # Rating & Reviews
         col("rating"),
         col("userRatingCount").alias("review_count"),
         col("weighted_rating"),
         col("rating_confidence"),
         col("rating_rank"),
-        
+
         # Business Info
         col("businessStatus").alias("business_status"),
         col("priceLevel").alias("price_level"),
         col("primaryType").alias("place_type"),
         col("currently_open").alias("is_open_now"),
-        
+
         # Contact
         col("internationalPhoneNumber").alias("phone"),
         col("websiteUri").alias("website"),
         col("googleMapsUri").alias("google_maps_url"),
-        
+
         # Scores
         col("service_score"),
         col("accessibility_score"),
         col("overall_score"),
-        
+
         # Service flags
         col("takeout"),
         col("delivery"),
         col("dineIn").alias("dine_in"),
         col("reservable"),
-        
+
         # Metadata
         current_timestamp().alias("processed_at"),
     )
@@ -267,7 +271,7 @@ if places_table_ready:
 
 # MAGIC %md
 # MAGIC ## 2. Travel Analysis Table
-# MAGIC 
+# MAGIC
 # MAGIC Combine distance matrix data with places for route optimization
 
 # COMMAND ----------
@@ -292,26 +296,26 @@ if distance_matrix_table_ready:
         col("destination_address"),
         col("origin_index"),
         col("destination_index"),
-        
+
         # Status
         col("status").alias("route_status"),
-        
+
         # Distance
         col("distance_meters"),
         col("distance_km"),
         col("distance_text"),
-        
+
         # Duration
         col("duration_seconds"),
         col("duration_minutes"),
         col("duration_text"),
-        
+
         # Traffic
         col("duration_in_traffic_seconds"),
         col("duration_in_traffic_minutes"),
         col("duration_in_traffic_text"),
         col("traffic_delay_minutes"),
-        
+
         # Fare (if transit)
         col("fare_currency"),
         col("fare_value"),
@@ -326,7 +330,7 @@ if distance_matrix_table_ready:
         "traffic_delay_percent",
         when(col("duration_in_traffic_seconds").isNotNull() & (col("duration_seconds") > 0),
              spark_round(
-                 ((col("duration_in_traffic_seconds") - col("duration_seconds")) / 
+                 ((col("duration_in_traffic_seconds") - col("duration_seconds")) /
                   col("duration_seconds")) * 100, 1
              ))
     ).withColumn(
@@ -363,7 +367,7 @@ if distance_matrix_table_ready:
 
 # MAGIC %md
 # MAGIC ## 3. Location Summary Statistics
-# MAGIC 
+# MAGIC
 # MAGIC Aggregate statistics for business intelligence
 
 # COMMAND ----------
@@ -413,7 +417,7 @@ if places_intelligence_ready:
 
 # MAGIC %md
 # MAGIC ## 4. Places by Type Analysis
-# MAGIC 
+# MAGIC
 # MAGIC Breakdown of places by type with statistics
 
 # COMMAND ----------
@@ -446,7 +450,7 @@ if places_intelligence_ready:
 
 # MAGIC %md
 # MAGIC ## 5. Top Rated Places View
-# MAGIC 
+# MAGIC
 # MAGIC Best places by weighted rating with minimum review threshold
 
 # COMMAND ----------
@@ -491,7 +495,7 @@ if places_intelligence_ready:
 
 # MAGIC %md
 # MAGIC ## 6. Nearest Places View
-# MAGIC 
+# MAGIC
 # MAGIC Closest places to reference location
 
 # COMMAND ----------
@@ -529,7 +533,7 @@ if places_intelligence_ready:
 
 # MAGIC %md
 # MAGIC ## 7. Geocoder Enriched Locations
-# MAGIC 
+# MAGIC
 # MAGIC Parsed and enriched geocoder data
 
 # COMMAND ----------
@@ -547,11 +551,11 @@ if not geocoder_flat_ready:
 if geocoder_flat_ready:
     # Read geocoder data
     geocoder_flat = spark.table(f"{SILVER_CATALOG}.{SILVER_SCHEMA}.geocoder_flattened")
-    
+
     # Only join with parsed table if it exists
     if geocoder_parsed_ready:
         geocoder_parsed = spark.table(f"{SILVER_CATALOG}.{SILVER_SCHEMA}.geocoder_address_parsed")
-        
+
         # Create enriched locations table with parsed address components
         geocoder_enriched = geocoder_flat.join(
             geocoder_parsed.select(
@@ -677,7 +681,7 @@ print("=" * 70)
 
 # MAGIC %md
 # MAGIC ## Quick Reference: Gold Tables Created
-# MAGIC 
+# MAGIC
 # MAGIC | Table | Description |
 # MAGIC |-------|-------------|
 # MAGIC | `places_intelligence` | Full place data with scores, rankings, and distances |
@@ -687,9 +691,9 @@ print("=" * 70)
 # MAGIC | `top_rated_places` | Top 50 places by weighted rating |
 # MAGIC | `nearest_places` | Top 50 closest places to reference location |
 # MAGIC | `geocoder_enriched` | Parsed and enriched geocoder data |
-# MAGIC 
+# MAGIC
 # MAGIC ## Calculated Columns
-# MAGIC 
+# MAGIC
 # MAGIC ### Places Intelligence
 # MAGIC - `distance_from_reference_km`: Haversine distance to reference point
 # MAGIC - `weighted_rating`: Bayesian average rating (adjusted for review count)
@@ -699,7 +703,7 @@ print("=" * 70)
 # MAGIC - `overall_score`: Combined distance + rating score
 # MAGIC - `rating_rank`: Rank by weighted rating
 # MAGIC - `distance_rank`: Rank by distance from reference
-# MAGIC 
+# MAGIC
 # MAGIC ### Travel Analysis
 # MAGIC - `distance_km`: Distance in kilometers
 # MAGIC - `duration_minutes`: Travel time in minutes
@@ -719,18 +723,18 @@ print("=" * 70)
 
 # MAGIC %sql
 # MAGIC -- Top rated places within 5km
-# MAGIC -- SELECT * FROM googlemaps.googlemaps_gold.places_intelligence 
-# MAGIC -- WHERE distance_from_reference_km < 5 
+# MAGIC -- SELECT * FROM googlemaps.googlemaps_gold.places_intelligence
+# MAGIC -- WHERE distance_from_reference_km < 5
 # MAGIC -- ORDER BY weighted_rating DESC LIMIT 10;
-# MAGIC 
+# MAGIC
 # MAGIC -- Travel routes with significant traffic
-# MAGIC -- SELECT * FROM googlemaps.googlemaps_gold.travel_analysis 
-# MAGIC -- WHERE traffic_delay_percent > 20 
+# MAGIC -- SELECT * FROM googlemaps.googlemaps_gold.travel_analysis
+# MAGIC -- WHERE traffic_delay_percent > 20
 # MAGIC -- ORDER BY traffic_delay_minutes DESC;
-# MAGIC 
+# MAGIC
 # MAGIC -- Summary statistics
 # MAGIC -- SELECT * FROM googlemaps.googlemaps_gold.location_summary;
-# MAGIC 
+# MAGIC
 # MAGIC -- Places by type breakdown
 # MAGIC -- SELECT * FROM googlemaps.googlemaps_gold.places_by_type ORDER BY place_count DESC;
 
